@@ -56,8 +56,11 @@ async function markOpened(req, env) {
 
 async function apipayWebhook(req, env, ctx) {
   const raw = await req.text();
-  if (!(await verifyWebhook(env, raw, req.headers.get('X-Webhook-Signature')))) {
-    return json({ error: 'bad signature' }, 401);
+  const v = await verifyWebhook(env, raw, req.headers.get('X-Webhook-Signature'));
+  if (!v.ok) {
+    console.log('apipay webhook rejected:', v.reason);
+    ctx.waitUntil(notifyAdmins(env, `⚠️ ApiPay: уведомление отклонено (401)\nПричина: ${v.reason}`));
+    return json({ error: 'bad signature', reason: v.reason }, 401);
   }
   let body;
   try { body = JSON.parse(raw); } catch { return json({ ok: true }); }

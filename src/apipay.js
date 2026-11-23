@@ -37,20 +37,25 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+async function hmac(secret, body, enc) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)));
+  if (enc === 'b64') return btoa(String.fromCharCode(...sig));
+  return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Возвращает { ok, reason } — reason объясняет, почему подпись не прошла (без раскрытия секрета) */
 export async function verifyWebhook(env, rawBody, signatureHeader) {
-  if (!env.APIPAY_WEBHOOK_SECRET) {
-    console.log('apipay: APIPAY_WEBHOOK_SECRET not set — webhook rejected');
-    return false;
-  }
-  if (!signatureHeader) return false;
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(env.APIPAY_WEBHOOK_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
-  const hex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  const got = signatureHeader.replace(/^sha256=/, '').trim().toLowerCase();
-  return timingSafeEqual(hex, got);
+  const secret = (env.APIPAY_WEBHOOK_SECRET || '').trim();
+  if (!secret) return { ok: false, reason: 'в Cloudflare нет секрета APIPAY_WEBHOOK_SECRET (или деплой ещё не прошёл)' };
+  if (!signatureHeader) return { ok: false, reason: 'ApiPay прислал уведомление без подписи — в кабинете ApiPay не создан секретный ключ защиты уведомлений' };
+  const got = signatureHeader.trim().replace(/^sha256=/i, '');
+  const hex = await hmac(secret, rawBody, 'hex');
+  if (timingSafeEqual(hex, got.toLowerCase())) return { ok: true };
+  const b64 = await hmac(secret, rawBody, 'b64');
+  if (timingSafeEqual(b64, got)) return { ok: true };
+  return { ok: false, reason: `подпись не совпала — секрет в Cloudflare (${secret.length} симв.) не тот, что в ApiPay. Скопируйте секрет заново` };
 }
 
 /** Достаёт из вебхука то, что нужно: статус и как найти наш платёж */
