@@ -23,6 +23,8 @@ PRODUCT_NAME = "ИИ арқылы фото мен видео курсы"
 PROMO_VIDEO_URL = "https://wowenter.github.io/aicourse/promo.mp4"
 LANDING_URL = "https://wowenter.github.io/aicourse/"
 TIKTOK_PIXEL_ID = "ВСТАВЬТЕ_ID_ПИКСЕЛЯ"
+# Закрытый канал с курсом (бот продаж — админ с правом приглашать)
+CHANNEL_ID = "-1003567231104"
 # 1 = принимать тестовые оплаты из песочницы ApiPay, 0 = только реальные
 APIPAY_SANDBOX = "1"
 
@@ -35,5 +37,4 @@ APIPAY_SANDBOX = "1"
 #   TIKTOK_TEST_EVENT_CODE (необязательно) код из вкладки Test Events
 #   APIPAY_API_KEY         ключ API из кабинета ApiPay
 #   APIPAY_WEBHOOK_SECRET  секрет подписи вебхуков ApiPay
-#   CHANNEL_ID             ID закрытого канала с курсом (вида -100...)
 #   COURSE_LINK            (запасной вариант) готовая ссылка на канал
