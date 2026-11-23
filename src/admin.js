@@ -187,6 +187,11 @@ export async function handleAdminUpdate(env, update) {
     await send(next === '1'
       ? '🔔 Уведомления о каждом лиде и нажатии «Оплатить» <b>включены</b>.\nО продажах уведомляю всегда.'
       : '🔕 Уведомления о лидах <b>выключены</b>.\nО продажах всё равно буду сообщать.');
+  } else if (text.startsWith('/reset')) {
+    // Для тестов: забыть пользователя, чтобы его /start снова считался новым лидом. /reset или /reset <telegram_id>
+    const id = Number(text.split(/\s+/)[1] || from.id);
+    const r = await db.prepare('DELETE FROM users WHERE tg_id=?').bind(id).run();
+    await send(r.meta.changes ? `🧹 Пользователь ${id} сброшен — его следующий /start будет как новый лид.` : `Пользователь ${id} не найден.`);
   } else if (text.startsWith('/testpay')) {
     // Тест выдачи доступа без реальной оплаты: /testpay <telegram_id>
     const id = Number(text.split(/\s+/)[1] || from.id);
