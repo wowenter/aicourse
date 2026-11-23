@@ -17,7 +17,7 @@ crons = ["* * * * *"]
 # Обычные (не секретные) настройки. Можно менять прямо здесь в GitHub.
 [vars]
 SALES_BOT_USERNAME = "ii_video_foto_bot"
-PRICE = "4990"
+PRICE = "50"  # ВРЕМЕННО для теста! Вернуть "4990"
 PRODUCT_NAME = "ИИ арқылы фото мен видео курсы"
 # Видео в приветствии бота (лежит в docs/promo.mp4 на GitHub Pages)
 PROMO_VIDEO_URL = "https://wowenter.github.io/aicourse/promo.mp4"

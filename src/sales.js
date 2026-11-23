@@ -151,8 +151,8 @@ async function onPay(env, from) {
   // Используем уже созданную ссылку, если ей меньше 23 часов
   let pay = await db.prepare(
     `SELECT * FROM payments WHERE tg_id=? AND status='pending' AND is_test=0 AND payment_url IS NOT NULL
-     AND created_at > ? ORDER BY id DESC LIMIT 1`
-  ).bind(from.id, t - 23 * 3600).first();
+     AND amount=? AND created_at > ? ORDER BY id DESC LIMIT 1`
+  ).bind(from.id, price(env), t - 23 * 3600).first();
 
   if (!pay) {
     if (!env.APIPAY_API_KEY) {
