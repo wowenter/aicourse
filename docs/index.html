@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Курс: ИИ для фото и видео</title>
+<meta name="description" content="Научись создавать фото и видео с помощью нейросетей. Доступ сразу после оплаты.">
+<meta name="theme-color" content="#0b0b12">
+
+<script>
+  // ====== НАСТРОЙКИ (заполнить) ======
+  window.CFG = {
+    PIXEL_ID: 'ВСТАВЬТЕ_ID_ПИКСЕЛЯ',                         // TikTok Events Manager → ваш пиксель
+    API: 'https://course-bot.ВАШ-ПОДДОМЕН.workers.dev',      // адрес воркера Cloudflare
+    BOT: 'ii_video_foto_bot'                                 // бот продаж, без @
+  };
+</script>
+
+<!-- TikTok Pixel -->
+<script>
+!function (w, d, t) {
+  w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script");n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
+  ttq.load(window.CFG.PIXEL_ID);
+  ttq.page();
+}(window, document, 'ttq');
+</script>
+
+<style>
+  :root{
+    --bg:#0b0b12; --card:#14141f; --line:#24243a; --text:#f4f4fb; --muted:#a3a3bd;
+    --a1:#ff2d78; --a2:#7a5cff; --a3:#22d3ee; --tg:#2aabee;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:96px}
+  .wrap{max-width:720px;margin:0 auto;padding:0 20px}
+  .glow{position:fixed;inset:-20% -10% auto -10%;height:70vh;z-index:-1;
+    background:radial-gradient(40% 50% at 20% 30%,rgba(255,45,120,.35),transparent 70%),
+               radial-gradient(40% 50% at 80% 20%,rgba(122,92,255,.35),transparent 70%),
+               radial-gradient(30% 40% at 50% 70%,rgba(34,211,238,.18),transparent 70%);filter:blur(20px)}
+  header{padding:56px 0 32px;text-align:center}
+  .badge{display:inline-flex;gap:8px;align-items:center;padding:6px 14px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--muted);background:rgba(255,255,255,.03)}
+  .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px #22c55e}
+  h1{font-size:clamp(32px,8vw,52px);line-height:1.08;margin:20px 0 16px;letter-spacing:-.02em;font-weight:800}
+  .grad{background:linear-gradient(90deg,var(--a1),var(--a2) 55%,var(--a3));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{font-size:18px;color:var(--muted);max-width:540px;margin:0 auto 28px}
+  .cta{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;max-width:420px;margin:0 auto;padding:18px 24px;border-radius:16px;
+    background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff;font-weight:700;font-size:18px;text-decoration:none;
+    box-shadow:0 10px 30px rgba(255,45,120,.35);transition:transform .15s}
+  .cta:active{transform:scale(.97)}
+  .cta svg{width:22px;height:22px}
+  .sub{font-size:13px;color:var(--muted);margin-top:12px}
+  section{padding:36px 0}
+  h2{font-size:26px;margin-bottom:18px;letter-spacing:-.01em}
+  .grid{display:grid;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 18px 18px 64px;position:relative}
+  .card .ic{position:absolute;left:16px;top:16px;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:19px;
+    background:linear-gradient(135deg,rgba(255,45,120,.2),rgba(122,92,255,.2))}
+  .card b{display:block;margin-bottom:2px}
+  .card span{color:var(--muted);font-size:15px}
+  .for li{list-style:none;padding:12px 0;border-bottom:1px solid var(--line);display:flex;gap:12px}
+  .for li:last-child{border:0}
+  .steps{counter-reset:s}
+  .step{display:flex;gap:14px;align-items:flex-start;padding:12px 0}
+  .step:before{counter-increment:s;content:counter(s);flex:0 0 34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;
+    background:var(--card);border:1px solid var(--line)}
+  .price{text-align:center;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:32px 20px;position:relative;overflow:hidden}
+  .price:before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,45,120,.12),rgba(122,92,255,.12));z-index:0}
+  .price>*{position:relative}
+  .amount{font-size:52px;font-weight:800;letter-spacing:-.02em;margin:6px 0}
+  .kaspi{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);margin-bottom:22px}
+  .kaspi i{width:10px;height:10px;border-radius:3px;background:#f14635;display:inline-block}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:24px 0 8px}
+  .sticky{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    background:rgba(11,11,18,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    transform:translateY(110%);transition:transform .25s}
+  .sticky.show{transform:none}
+  .sticky .cta{padding:15px 20px;font-size:17px}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="wrap">
+  <header>
+    <div class="badge"><span class="dot"></span> Доступ сразу после оплаты</div>
+    <h1>Создавай <span class="grad">фото и видео</span> с помощью ИИ</h1>
+    <p class="lead">Пошаговый курс по нейросетям: от первой генерации до контента, который можно продавать. Без опыта и сложных программ — всё с телефона.</p>
+    <a class="cta js-tg" href="https://t.me/ii_video_foto_bot">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.47l-.37 5.2c.53 0 .76-.23 1.04-.5l2.5-2.39 5.18 3.79c.95.52 1.62.25 1.88-.88l3.4-15.94c.3-1.4-.5-1.95-1.43-1.6L1.3 10.9c-1.36.53-1.34 1.3-.23 1.64l5.1 1.6L18.03 6.7c.56-.37 1.07-.17.65.2"/></svg>
+      Получить курс в Telegram
+    </a>
+    <p class="sub">Откроется бот — нажми «Старт»</p>
+  </header>
+
+  <section>
+    <h2>Чему научишься</h2>
+    <div class="grid">
+      <div class="card"><div class="ic">📸</div><b>ИИ-фото и аватары</b><span>Реалистичные портреты, фотосессии и арты по одному селфи</span></div>
+      <div class="card"><div class="ic">🎬</div><b>Видео из текста и фото</b><span>Короткие ролики для TikTok, Reels и рекламы за минуты</span></div>
+      <div class="card"><div class="ic">🗣</div><b>Оживление и говорящие аватары</b><span>Фото, которые двигаются и говорят твоим текстом</span></div>
+      <div class="card"><div class="ic">🧩</div><b>Готовые промпты</b><span>Шаблоны, которые просто копируешь и получаешь результат</span></div>
+      <div class="card"><div class="ic">💸</div><b>Заработок на ИИ-контенте</b><span>Где брать заказы и сколько за это платят</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Кому подойдёт</h2>
+    <ul class="for">
+      <li>✅ <span>Блогерам — чтобы делать контент быстрее и ярче</span></li>
+      <li>✅ <span>Предпринимателям — реклама без фотографа и видеографа</span></li>
+      <li>✅ <span>Тем, кто ищет новый навык и доход</span></li>
+      <li>✅ <span>Новичкам — объясняем с нуля</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Как получить курс</h2>
+    <div class="steps">
+      <div class="step"><div>Нажми кнопку и открой бота в Telegram</div></div>
+      <div class="step"><div>Оплати через Kaspi — займёт 30 секунд</div></div>
+      <div class="step"><div>Бот сразу пришлёт доступ к курсу</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="price">
+      <div style="color:var(--muted)">Полный доступ к курсу</div>
+      <div class="amount">4 990 ₸</div>
+      <div class="kaspi"><i></i> Оплата через Kaspi</div>
+      <a class="cta js-tg" href="https://t.me/ii_video_foto_bot">Перейти в Telegram →</a>
+    </div>
+  </section>
+
+  <footer>© 2026 · Курс «ИИ для фото и видео»</footer>
+</div>
+
+<div class="sticky" id="sticky">
+  <a class="cta js-tg" href="https://t.me/ii_video_foto_bot">Получить курс в Telegram</a>
+</div>
+
+<script>
+(function () {
+  var C = window.CFG;
+  var qs = new URLSearchParams(location.search);
+  var code = null;
+  var botUrl = 'https://t.me/' + C.BOT;
+
+  function cookie(n) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function setLinks(url) {
+    document.querySelectorAll('.js-tg').forEach(function (a) { a.href = url; });
+  }
+
+  // 1) Сохраняем визит: ttclid + cookie пикселя + метки рекламы → получаем код для бота
+  var ready = new Promise(function (resolve) {
+    var t0 = Date.now();
+    (function wait() {
+      if (cookie('_ttp') || Date.now() - t0 > 1500) {
+        fetch(C.API + '/api/click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ttclid: qs.get('ttclid') || '',
+            ttp: cookie('_ttp'),
+            url: location.href,
+            utm_source: qs.get('utm_source') || '',
+            utm_campaign: qs.get('utm_campaign') || '',
+            utm_adgroup: qs.get('utm_adgroup') || qs.get('utm_term') || '',
+            utm_ad: qs.get('utm_ad') || qs.get('utm_content') || ''
+          })
+        }).then(function (r) { return r.json(); })
+          .then(function (d) { code = d.code; setLinks(botUrl + '?start=' + code); resolve(); })
+          .catch(function () { resolve(); });
+      } else setTimeout(wait, 150);
+    })();
+  });
+
+  // 2) Клик по кнопке → событие в пиксель + отметка «перешёл в Telegram»
+  document.querySelectorAll('.js-tg').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      try { ttq.track('ClickButton', { content_name: 'open_telegram' }); } catch (x) {}
+      var go = function () {
+        var url = code ? botUrl + '?start=' + code : botUrl;
+        if (code && navigator.sendBeacon) {
+          navigator.sendBeacon(C.API + '/api/open', new Blob([JSON.stringify({ code: code })], { type: 'text/plain' }));
+        }
+        location.href = url;
+      };
+      if (code) go();
+      else Promise.race([ready, new Promise(function (r) { setTimeout(r, 2500); })]).then(go);
+    });
+  });
+
+  // 3) Плавающая кнопка после прокрутки
+  var st = document.getElementById('sticky');
+  window.addEventListener('scroll', function () { st.classList.toggle('show', window.scrollY > 420); }, { passive: true });
+})();
+</script>
+</body>
+</html>

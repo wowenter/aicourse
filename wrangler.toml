@@ -1,0 +1,37 @@
+name = "course-bot"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "course-bot-db"
+database_id = "91b9d08c-b33e-4a83-aba4-c70e7be63042"
+
+# Каждую минуту — проверка, кому пора отправить напоминание
+[triggers]
+crons = ["* * * * *"]
+
+# Обычные (не секретные) настройки. Можно менять прямо здесь в GitHub.
+[vars]
+SALES_BOT_USERNAME = "ii_video_foto_bot"
+PRICE = "4990"
+PRODUCT_NAME = "Курс: ИИ для фото и видео"
+LANDING_URL = "https://wowenter.github.io/aicourse/"
+TIKTOK_PIXEL_ID = "ВСТАВЬТЕ_ID_ПИКСЕЛЯ"
+# 1 = принимать тестовые оплаты из песочницы ApiPay, 0 = только реальные
+APIPAY_SANDBOX = "1"
+
+# Секреты задаются в Cloudflare: Settings -> Variables and Secrets (тип Secret):
+#   SALES_BOT_TOKEN        токен бота продаж (@ii_video_foto_bot)
+#   ADMIN_BOT_TOKEN        токен админ-бота (@traffic_aicheckbot)
+#   ADMIN_IDS              ваш Telegram ID (несколько — через запятую)
+#   WEBHOOK_SECRET         любая длинная строка из букв и цифр
+#   TIKTOK_ACCESS_TOKEN    токен Events API из TikTok Events Manager
+#   TIKTOK_TEST_EVENT_CODE (необязательно) код из вкладки Test Events
+#   APIPAY_API_KEY         ключ API из кабинета ApiPay
+#   APIPAY_WEBHOOK_SECRET  секрет подписи вебхуков ApiPay
+#   CHANNEL_ID             ID закрытого канала с курсом (вида -100...)
+#   COURSE_LINK            (запасной вариант) готовая ссылка на канал
