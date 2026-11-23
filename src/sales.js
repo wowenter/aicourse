@@ -1,5 +1,5 @@
 // Бот продаж: /start, оплата, выдача доступа, напоминания
-import { now, getUserWithClick, getSetting } from './db.js';
+import { now, getUserWithClick, getSetting, setSetting } from './db.js';
 import { tg, esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
 import { createPaymentLink } from './apipay.js';
@@ -61,6 +61,28 @@ export async function handleSalesUpdate(env, update) {
   }
 }
 
+// Приветствие: видео + описание курса в подписи + кнопка оплаты.
+// После первой отправки Telegram даёт file_id — дальше видео отправляется мгновенно.
+async function sendWelcome(env, chatId) {
+  const caption = T.COURSE_TEXT(price(env));
+  const markup = payKeyboard(env);
+  const videoUrl = env.PROMO_VIDEO_URL;
+  if (videoUrl) {
+    const cached = await getSetting(env.DB, 'promo_file_id');
+    const r = await tg(env.SALES_BOT_TOKEN, 'sendVideo', {
+      chat_id: chatId, video: cached || videoUrl, caption, parse_mode: 'HTML',
+      reply_markup: markup, supports_streaming: true, width: 1920, height: 1080,
+    });
+    if (r.ok) {
+      const fid = r.result?.video?.file_id;
+      if (!cached && fid) await setSetting(env.DB, 'promo_file_id', fid);
+      return;
+    }
+    if (cached) await setSetting(env.DB, 'promo_file_id', ''); // file_id устарел — в следующий раз по ссылке
+  }
+  await tg(env.SALES_BOT_TOKEN, 'sendMessage', { chat_id: chatId, text: caption, parse_mode: 'HTML', reply_markup: markup });
+}
+
 async function onStart(env, from, payload) {
   const db = env.DB;
   const t = now();
@@ -92,9 +114,7 @@ async function onStart(env, from, payload) {
     return;
   }
 
-  await tg(env.SALES_BOT_TOKEN, 'sendMessage', {
-    chat_id: from.id, text: T.COURSE_TEXT(price(env)), parse_mode: 'HTML', reply_markup: payKeyboard(env),
-  });
+  await sendWelcome(env, from.id);
 
   if (!existing) {
     await sendTikTokEvent(env, 'CompleteRegistration', u, { eventId: `reg_${from.id}` });
