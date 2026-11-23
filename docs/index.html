@@ -199,6 +199,7 @@
 
   // Сохраняем визит сразу, а когда пиксель поставит cookie _ttp — дополняем
   send();
+  try { ttq.track('ViewContent', { content_id: 'course', content_type: 'product', content_name: 'ИИ курс', value: 4990, currency: 'KZT' }, { event_id: 'vc_' + code }); } catch (x) {}
   var t0 = Date.now();
   (function waitTtp() {
     if (cookie('_ttp')) send();

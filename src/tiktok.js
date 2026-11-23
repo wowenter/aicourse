@@ -15,7 +15,8 @@ export async function sendTikTokEvent(env, event, u, { eventId, value } = {}) {
     console.log('tiktok: not configured, skip', event);
     return null;
   }
-  const user = { external_id: await sha256(String(u.tg_id)) };
+  const user = {};
+  if (u.tg_id) user.external_id = await sha256(String(u.tg_id));
   if (u.ttclid) user.ttclid = u.ttclid;
   if (u.ttp) user.ttp = u.ttp;
   if (u.ip) user.ip = u.ip;
@@ -46,7 +47,7 @@ export async function sendTikTokEvent(env, event, u, { eventId, value } = {}) {
       body: JSON.stringify(body),
     });
     const j = await r.json();
-    console.log('tiktok', event, u.tg_id, JSON.stringify(j));
+    console.log('tiktok', event, u.tg_id || u.code || '', JSON.stringify(j));
     return j;
   } catch (e) {
     console.log('tiktok failed', event, String(e));

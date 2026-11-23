@@ -4,6 +4,7 @@ import { tg } from './telegram.js';
 import { handleSalesUpdate, runReminders, grantAccess, notifyAdmins } from './sales.js';
 import { handleAdminUpdate } from './admin.js';
 import { verifyWebhook, parseWebhook } from './apipay.js';
+import { sendTikTokEvent } from './tiktok.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,10 +25,11 @@ function randomCode(len = 10) {
 // Лендинг сообщает: человек зашёл (сохраняем ttclid, cookie пикселя, IP, браузер, метки)
 // Код может прийти от лендинга (он создаёт его сам, чтобы ссылка на бота была готова мгновенно).
 // Повторный запрос с тем же кодом дополняет данные (cookie пикселя, отметка «перешёл в Telegram»).
-async function saveClick(req, env) {
+async function saveClick(req, env, ctx) {
   const b = await req.json().catch(() => ({}));
   const code = /^[A-Za-z0-9]{8,32}$/.test(b.code || '') ? b.code : randomCode();
   const t = now();
+  const isNew = !(await env.DB.prepare('SELECT 1 FROM clicks WHERE code=?').bind(code).first());
   const nz = (v, n) => (v ? clip(v, n) : null);
   await env.DB.prepare(
     `INSERT INTO clicks (code, ttclid, ttp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at, opened_at)
@@ -42,6 +44,13 @@ async function saveClick(req, env) {
     nz(b.url, 1000), nz(b.utm_source, 100), nz(b.utm_campaign, 200),
     nz(b.utm_adgroup, 200), nz(b.utm_ad, 200), t, b.opened ? t : null
   ).run();
+  // Посещение лендинга → ViewContent в TikTok с сервера (тот же event_id, что у пикселя — TikTok склеит дубли)
+  if (isNew && ctx) {
+    ctx.waitUntil(sendTikTokEvent(env, 'ViewContent', {
+      code, ttclid: b.ttclid, ttp: b.ttp, ip: req.headers.get('CF-Connecting-IP') || '',
+      ua: req.headers.get('User-Agent') || '', page_url: b.url,
+    }, { eventId: `vc_${code}`, value: Number(env.PRICE || 4990) }));
+  }
   return json({ code }, 200, CORS);
 }
 
@@ -114,7 +123,7 @@ export default {
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-    if (req.method === 'POST' && path === '/api/click') return saveClick(req, env);
+    if (req.method === 'POST' && path === '/api/click') return saveClick(req, env, ctx);
     if (req.method === 'POST' && path === '/api/open') return markOpened(req, env);
 
     if (req.method === 'POST' && (path === '/tg/sales' || path === '/tg/admin')) {
