@@ -29,21 +29,23 @@ async function saveClick(req, env, ctx) {
   const b = await req.json().catch(() => ({}));
   const code = /^[A-Za-z0-9]{8,32}$/.test(b.code || '') ? b.code : randomCode();
   const t = now();
-  const isNew = !(await env.DB.prepare('SELECT 1 FROM clicks WHERE code=?').bind(code).first());
   const nz = (v, n) => (v ? clip(v, n) : null);
-  await env.DB.prepare(
-    `INSERT INTO clicks (code, ttclid, ttp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at, opened_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(code) DO UPDATE SET
-       ttclid = COALESCE(clicks.ttclid, excluded.ttclid),
-       ttp = COALESCE(clicks.ttp, excluded.ttp),
-       opened_at = COALESCE(clicks.opened_at, excluded.opened_at)`
+  // Атомарно: вставка удаётся только у первого запроса с этим кодом → только он шлёт ViewContent
+  const ins = await env.DB.prepare(
+    `INSERT OR IGNORE INTO clicks (code, ttclid, ttp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at, opened_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
     code, nz(b.ttclid, 500), nz(b.ttp, 200),
     req.headers.get('CF-Connecting-IP') || '', clip(req.headers.get('User-Agent'), 500),
     nz(b.url, 1000), nz(b.utm_source, 100), nz(b.utm_campaign, 200),
     nz(b.utm_adgroup, 200), nz(b.utm_ad, 200), t, b.opened ? t : null
   ).run();
+  const isNew = ins.meta.changes > 0;
+  if (!isNew) {
+    await env.DB.prepare(
+      `UPDATE clicks SET ttclid=COALESCE(ttclid, ?), ttp=COALESCE(ttp, ?), opened_at=COALESCE(opened_at, ?) WHERE code=?`
+    ).bind(nz(b.ttclid, 500), nz(b.ttp, 200), b.opened ? t : null, code).run();
+  }
   // Посещение лендинга → ViewContent в TikTok с сервера (тот же event_id, что у пикселя — TikTok склеит дубли)
   if (isNew && ctx) {
     ctx.waitUntil(sendTikTokEvent(env, 'ViewContent', {
