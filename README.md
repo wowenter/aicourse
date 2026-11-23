@@ -21,7 +21,7 @@
 ## Шаг 3. Воркер (Cloudflare)
 1. Cloudflare → **Workers & Pages → Create → Import a repository** → выберите репозиторий → Deploy.
    Каждое изменение в GitHub будет обновлять бота автоматически.
-2. После деплоя скопируйте адрес воркера (`https://course-bot.xxxx.workers.dev`) и впишите его в `docs/index.html` → `API`.
+2. После деплоя скопируйте адрес воркера (`https://aicourse.arsennumberone.workers.dev`) и впишите его в `docs/index.html` → `API`.
 3. Воркер → **Settings → Variables and Secrets** → добавьте (тип **Secret**):
 
 | Имя | Что вписать |
@@ -38,12 +38,12 @@
 
 4. В `wrangler.toml` и `docs/index.html` впишите **ID пикселя** вместо `ВСТАВЬТЕ_ID_ПИКСЕЛЯ`.
 5. Откройте в браузере один раз:
-   `https://course-bot.xxxx.workers.dev/setup?key=ВАШ_WEBHOOK_SECRET`
+   `https://aicourse.arsennumberone.workers.dev/setup?key=ВАШ_WEBHOOK_SECRET`
    Должно быть `"ok": true` у sales и admin — боты подключены.
 
 ## Шаг 4. ApiPay
 Кабинет ApiPay → **Настройки → Подключение** → `webhook_url`:
-`https://course-bot.xxxx.workers.dev/apipay/webhook`
+`https://aicourse.arsennumberone.workers.dev/apipay/webhook`
 Нажмите «Проверить уведомления» — должен вернуться ответ 200.
 
 ## Шаг 5. Проверка
