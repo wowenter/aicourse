@@ -22,7 +22,7 @@ PRODUCT_NAME = "ИИ арқылы фото мен видео курсы"
 # Видео в приветствии бота (лежит в docs/promo.mp4 на GitHub Pages)
 PROMO_VIDEO_URL = "https://wowenter.github.io/aicourse/promo.mp4"
 LANDING_URL = "https://wowenter.github.io/aicourse/"
-TIKTOK_PIXEL_ID = "ВСТАВЬТЕ_ID_ПИКСЕЛЯ"
+TIKTOK_PIXEL_ID = "DC299MRC77U0A5LSGC40"
 # Закрытый канал с курсом (бот продаж — админ с правом приглашать)
 CHANNEL_ID = "-1003567231104"
 # 1 = принимать тестовые оплаты из песочницы ApiPay, 0 = только реальные
