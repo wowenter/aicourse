@@ -118,6 +118,8 @@ async function onStart(env, from, payload) {
 
   if (!existing) {
     await sendTikTokEvent(env, 'CompleteRegistration', u, { eventId: `reg_${from.id}` });
+    // Старт бота дублируем как AddToCart — его можно выбрать для оптимизации в цели «Продажи»
+    await sendTikTokEvent(env, 'AddToCart', u, { eventId: `atc_${from.id}`, value: price(env) });
     if ((await getSetting(db, 'notify_leads', '1')) === '1') {
       await notifyAdmins(env, `🆕 Новый лид: ${userLabel(u)}\n📍 Источник: ${adLabel(u)}`);
     }
