@@ -22,17 +22,25 @@ function randomCode(len = 10) {
 }
 
 // Лендинг сообщает: человек зашёл (сохраняем ttclid, cookie пикселя, IP, браузер, метки)
+// Код может прийти от лендинга (он создаёт его сам, чтобы ссылка на бота была готова мгновенно).
+// Повторный запрос с тем же кодом дополняет данные (cookie пикселя, отметка «перешёл в Telegram»).
 async function saveClick(req, env) {
   const b = await req.json().catch(() => ({}));
-  const code = randomCode();
+  const code = /^[A-Za-z0-9]{8,32}$/.test(b.code || '') ? b.code : randomCode();
+  const t = now();
+  const nz = (v, n) => (v ? clip(v, n) : null);
   await env.DB.prepare(
-    `INSERT INTO clicks (code, ttclid, ttp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO clicks (code, ttclid, ttp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at, opened_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(code) DO UPDATE SET
+       ttclid = COALESCE(clicks.ttclid, excluded.ttclid),
+       ttp = COALESCE(clicks.ttp, excluded.ttp),
+       opened_at = COALESCE(clicks.opened_at, excluded.opened_at)`
   ).bind(
-    code, clip(b.ttclid, 500), clip(b.ttp, 200),
+    code, nz(b.ttclid, 500), nz(b.ttp, 200),
     req.headers.get('CF-Connecting-IP') || '', clip(req.headers.get('User-Agent'), 500),
-    clip(b.url, 1000), clip(b.utm_source, 100), clip(b.utm_campaign, 200),
-    clip(b.utm_adgroup, 200), clip(b.utm_ad, 200), now()
+    nz(b.url, 1000), nz(b.utm_source, 100), nz(b.utm_campaign, 200),
+    nz(b.utm_adgroup, 200), nz(b.utm_ad, 200), t, b.opened ? t : null
   ).run();
   return json({ code }, 200, CORS);
 }

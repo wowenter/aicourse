@@ -126,7 +126,7 @@
   <section>
     <ul class="for">
       <li>✅ <span>Сабақ Telegram каналда болады</span></li>
-      <li>✅ <span>1 жылға доступ</span></li>
+      <li>✅ <span>Мәңгілік доступ</span></li>
       <li>✅ <span>Қалаған уақытта көре аласыз</span></li>
       <li>📱 <span><b>Барлығын телефонмен жасайсыз!</b></span></li>
     </ul>
@@ -167,55 +167,60 @@
 (function () {
   var C = window.CFG;
   var qs = new URLSearchParams(location.search);
-  var code = null;
-  var botUrl = 'https://t.me/' + C.BOT;
+
+  // 1) Код визита создаём сразу в браузере — ссылка на бота готова мгновенно, ждать сервер не нужно
+  var abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', code = '';
+  var rnd = (window.crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(12)) : null;
+  for (var i = 0; i < 12; i++) code += abc[(rnd ? rnd[i] : Math.floor(Math.random() * 256)) % abc.length];
+
+  var webUrl = 'https://t.me/' + C.BOT + '?start=' + code;
+  var appUrl = 'tg://resolve?domain=' + C.BOT + '&start=' + code;
+  document.querySelectorAll('.js-tg').forEach(function (a) { a.href = webUrl; });
 
   function cookie(n) {
     var m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)'));
     return m ? decodeURIComponent(m[1]) : '';
   }
-  function setLinks(url) {
-    document.querySelectorAll('.js-tg').forEach(function (a) { a.href = url; });
+  function payload(extra) {
+    var d = {
+      code: code, ttclid: qs.get('ttclid') || '', ttp: cookie('_ttp'), url: location.href,
+      utm_source: qs.get('utm_source') || '', utm_campaign: qs.get('utm_campaign') || '',
+      utm_adgroup: qs.get('utm_adgroup') || qs.get('utm_term') || '',
+      utm_ad: qs.get('utm_ad') || qs.get('utm_content') || ''
+    };
+    for (var k in extra) d[k] = extra[k];
+    return JSON.stringify(d);
+  }
+  function send(extra) {
+    var body = payload(extra || {});
+    if (navigator.sendBeacon && navigator.sendBeacon(C.API + '/api/click', new Blob([body], { type: 'text/plain' }))) return;
+    fetch(C.API + '/api/click', { method: 'POST', body: body, keepalive: true }).catch(function () {});
   }
 
-  // 1) Сохраняем визит: ttclid + cookie пикселя + метки рекламы → получаем код для бота
-  var ready = new Promise(function (resolve) {
-    var t0 = Date.now();
-    (function wait() {
-      if (cookie('_ttp') || Date.now() - t0 > 1500) {
-        fetch(C.API + '/api/click', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ttclid: qs.get('ttclid') || '',
-            ttp: cookie('_ttp'),
-            url: location.href,
-            utm_source: qs.get('utm_source') || '',
-            utm_campaign: qs.get('utm_campaign') || '',
-            utm_adgroup: qs.get('utm_adgroup') || qs.get('utm_term') || '',
-            utm_ad: qs.get('utm_ad') || qs.get('utm_content') || ''
-          })
-        }).then(function (r) { return r.json(); })
-          .then(function (d) { code = d.code; setLinks(botUrl + '?start=' + code); resolve(); })
-          .catch(function () { resolve(); });
-      } else setTimeout(wait, 150);
-    })();
-  });
+  // Сохраняем визит сразу, а когда пиксель поставит cookie _ttp — дополняем
+  send();
+  var t0 = Date.now();
+  (function waitTtp() {
+    if (cookie('_ttp')) send();
+    else if (Date.now() - t0 < 5000) setTimeout(waitTtp, 300);
+  })();
 
-  // 2) Клик по кнопке → событие в пиксель + отметка «перешёл в Telegram»
+  // 2) Клик → сразу открываем приложение Telegram (без промежуточной страницы t.me),
+  //    если приложение не открылось за 0.8 с — открываем обычную ссылку t.me
   document.querySelectorAll('.js-tg').forEach(function (a) {
     a.addEventListener('click', function (e) {
       e.preventDefault();
       try { ttq.track('ClickButton', { content_name: 'open_telegram' }); } catch (x) {}
-      var go = function () {
-        var url = code ? botUrl + '?start=' + code : botUrl;
-        if (code && navigator.sendBeacon) {
-          navigator.sendBeacon(C.API + '/api/open', new Blob([JSON.stringify({ code: code })], { type: 'text/plain' }));
-        }
-        location.href = url;
-      };
-      if (code) go();
-      else Promise.race([ready, new Promise(function (r) { setTimeout(r, 2500); })]).then(go);
+      send({ opened: 1 });
+      var left = false;
+      var onHide = function () { if (document.hidden) left = true; };
+      document.addEventListener('visibilitychange', onHide);
+      window.addEventListener('pagehide', function () { left = true; });
+      location.href = appUrl;
+      setTimeout(function () {
+        document.removeEventListener('visibilitychange', onHide);
+        if (!left && !document.hidden) location.href = webUrl;
+      }, 800);
     });
   });
 
