@@ -3,7 +3,10 @@ import { ensureSchema, now } from './db.js';
 import { tg } from './telegram.js';
 import { handleSalesUpdate, runReminders, grantAccess, notifyAdmins } from './sales.js';
 import { handleAdminUpdate } from './admin.js';
-import { verifyWebhook, parseWebhook } from './apipay.js';
+import { verifyWebhook, parseWebhook, verifyHmac } from './apipay.js';
+import { paymentProvider, checkSession } from './kaspi.js';
+import { getSetting, setSetting } from './db.js';
+import { esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
 
 const CORS = {
@@ -98,6 +101,58 @@ async function apipayWebhook(req, env, ctx) {
   return json({ ok: true });
 }
 
+// Уведомления от своего шлюза Kaspi (gateway/)
+async function kaspiWebhook(req, env, ctx) {
+  const raw = await req.text();
+  if (!(await verifyHmac(env.KASPI_WEBHOOK_SECRET, raw, req.headers.get('X-Webhook-Signature')))) {
+    console.log('kaspi webhook: bad signature');
+    return json({ error: 'bad signature' }, 401);
+  }
+  let b; try { b = JSON.parse(raw); } catch { return json({ ok: true }); }
+  console.log('kaspi webhook', b.event, b.paymentId, b.status);
+
+  ctx.waitUntil((async () => {
+    const db = env.DB;
+    const p = await db.prepare(`SELECT * FROM payments WHERE invoice_id=? AND order_id LIKE 'kq%' ORDER BY id DESC`)
+      .bind(String(b.paymentId)).first();
+    if (b.event === 'payment.success') {
+      if (!p) {
+        await notifyAdmins(env, `⚠️ Kaspi: пришла оплата, но не нашёл, чей это платёж.\n<code>${esc(JSON.stringify({ id: b.paymentId, amount: b.amount }))}</code>`);
+        return;
+      }
+      if (b.amount != null && Number(b.amount) + 0.001 < Number(p.amount)) {
+        await notifyAdmins(env, `⚠️ Kaspi: сумма оплаты ${b.amount} меньше цены ${p.amount} (платёж ${p.id}). Доступ не выдан — проверьте вручную.`);
+        return;
+      }
+      await grantAccess(env, p.id);
+    } else if (b.event === 'payment.lost' || b.status === 'SessionExpired') {
+      const u = p ? await db.prepare('SELECT * FROM users WHERE tg_id=?').bind(p.tg_id).first() : null;
+      await notifyAdmins(env,
+        `⚠️ <b>Kaspi: сессия кассира слетела</b>, статус оплаты неизвестен${u ? ` (${userLabel(u)})` : ''}.\n` +
+        `Проверьте оплату в Kaspi Pay. Если человек оплатил — выдайте доступ командой <code>/grant ${p ? p.tg_id : 'ID'}</code>.\n` +
+        `И войдите заново: 🏦 Kaspi → Войти.`);
+    }
+  })());
+  return json({ ok: true });
+}
+
+// Каждые 15 минут: жива ли сессия кассира. Если нет — предупредить и переключиться на ApiPay (если он настроен).
+async function kaspiHealth(env) {
+  if ((await paymentProvider(env)) !== 'kaspi') return;
+  let st;
+  try { st = await checkSession(env); } catch (e) { st = { active: false, reason: String(e) }; }
+  if (st.active) return;
+  const last = Number(await getSetting(env.DB, 'kaspi_alert_at', '0'));
+  if (Date.now() / 1000 - last < 3600) return;
+  await setSetting(env.DB, 'kaspi_alert_at', Math.floor(Date.now() / 1000));
+  let extra = '';
+  if (env.APIPAY_API_KEY) {
+    await setSetting(env.DB, 'payment_provider', 'apipay');
+    extra = '\n\n🔁 Оплата автоматически переключена на <b>ApiPay</b>, продажи не стоят.';
+  }
+  await notifyAdmins(env, `⚠️ <b>Своя касса Kaspi не отвечает</b>: ${esc(st.reason || 'сессия неактивна')}.\nВойдите заново: 🏦 Kaspi → Войти.${extra}`);
+}
+
 // Разовая настройка: подключает вебхуки обоих ботов. Открыть в браузере: /setup?key=WEBHOOK_SECRET
 async function setup(req, env) {
   const url = new URL(req.url);
@@ -137,6 +192,7 @@ export default {
     }
 
     if (req.method === 'POST' && path === '/apipay/webhook') return apipayWebhook(req, env, ctx);
+    if (req.method === 'POST' && path === '/kaspi/webhook') return kaspiWebhook(req, env, ctx);
     if (path === '/setup') return setup(req, env);
 
     return new Response('course-bot is running ✅', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
@@ -145,5 +201,7 @@ export default {
   async scheduled(event, env, ctx) {
     await ensureSchema(env.DB);
     ctx.waitUntil(runReminders(env));
+    const minute = new Date(event.scheduledTime || Date.now()).getUTCMinutes();
+    if (minute % 15 === 0) ctx.waitUntil(kaspiHealth(env).catch((e) => console.log('kaspiHealth', String(e))));
   },
 };

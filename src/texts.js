@@ -28,6 +28,9 @@ export const PAY_LINK_TEXT = (price) => `Төлеу үшін төмендегі 
 
 export const PAY_LINK_BUTTON = '🟥 Kaspi арқылы төлеу';
 
+// Для своей кассы: ссылка живёт около 3 минут
+export const KASPI_LINK_NOTE = '⏱ Ссылка 3 минут ішінде жарамды. Уақыт өтіп кетсе, «Курсты сатып алу» батырмасын қайта бас.';
+
 export const PAY_ERROR_TEXT = 'Ой, оплата ссылкасы ашылмады 😔 Бір минуттан кейін қайта басып көр.';
 
 export const PAID_TEXT = (link) => `🎉 Оплата өтті! Рахмет!

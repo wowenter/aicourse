@@ -58,6 +58,14 @@ export async function verifyWebhook(env, rawBody, signatureHeader) {
   return { ok: false, reason: `подпись не совпала — секрет в Cloudflare (${secret.length} симв.) не тот, что в ApiPay. Скопируйте секрет заново` };
 }
 
+/** Проверка подписи sha256=<hex> любым секретом (используется и для шлюза Kaspi) */
+export async function verifyHmac(secret, rawBody, signatureHeader) {
+  secret = (secret || '').trim();
+  if (!secret || !signatureHeader) return false;
+  const got = signatureHeader.trim().replace(/^sha256=/i, '').toLowerCase();
+  return timingSafeEqual(await hmac(secret, rawBody, 'hex'), got);
+}
+
 /** Достаёт из вебхука то, что нужно: статус и как найти наш платёж */
 export function parseWebhook(body) {
   const inv = body.invoice || {};

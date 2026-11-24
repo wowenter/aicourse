@@ -2,6 +2,7 @@
 import { now, dayStart, fmtTime, getSetting, setSetting } from './db.js';
 import { tg, tgSendDocument, esc } from './telegram.js';
 import { adminIds, grantAccess } from './sales.js';
+import { paymentProvider, loginStart, loginFinish, checkSession, getKaspiSession } from './kaspi.js';
 
 const KB = {
   keyboard: [
@@ -9,6 +10,7 @@ const KB = {
     [{ text: '🗓 7 дней' }, { text: '📈 Всё время' }],
     [{ text: '🎯 По рекламе' }, { text: '⏳ Не оплатили' }],
     [{ text: '📥 Выгрузка' }, { text: '🔔 Уведомления' }],
+    [{ text: '🏦 Kaspi' }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -118,6 +120,35 @@ async function exportCsv(env, chatId) {
   await tgSendDocument(env.ADMIN_BOT_TOKEN, chatId, name, csv, `📥 Все лиды: ${results.length}`);
 }
 
+// ------------------------------------------------------------------ своя касса Kaspi
+async function kaspiPanel(env) {
+  const prov = await paymentProvider(env);
+  const s = await getKaspiSession(env);
+  const gwOk = !!(env.KASPI_GATEWAY_URL && env.KASPI_GATEWAY_KEY);
+  const text = `🏦 <b>Приём оплаты</b>
+
+Сейчас оплата идёт через: <b>${prov === 'kaspi' ? 'Свою кассу Kaspi' : 'ApiPay'}</b>
+Шлюз Kaspi: ${gwOk ? '✅ настроен' : '❌ не настроен (нет KASPI_GATEWAY_URL / KASPI_GATEWAY_KEY)'}
+Кассир: ${s ? `✅ вход выполнен${s.orgName ? ` (${esc(s.orgName)})` : ''}` : '— вход не выполнен'}`;
+  const kb = { inline_keyboard: [
+    [{ text: '🔑 Войти в Kaspi', callback_data: 'kaspi:login' }, { text: '🔄 Проверить', callback_data: 'kaspi:check' }],
+    [prov === 'kaspi'
+      ? { text: '↩️ Переключить на ApiPay', callback_data: 'kaspi:use:apipay' }
+      : { text: '🏦 Переключить на свою кассу', callback_data: 'kaspi:use:kaspi' }],
+  ] };
+  return { text, kb };
+}
+
+async function setState(db, state) {
+  await setSetting(db, 'admin_state', JSON.stringify({ ...state, at: now() }));
+}
+async function getState(db) {
+  try {
+    const st = JSON.parse(await getSetting(db, 'admin_state', '{}'));
+    return st.at && now() - st.at < 600 ? st : {};
+  } catch { return {}; }
+}
+
 export async function handleAdminUpdate(env, update) {
   const db = env.DB;
   const token = env.ADMIN_BOT_TOKEN;
@@ -143,6 +174,30 @@ export async function handleAdminUpdate(env, update) {
   if (update.callback_query) {
     const q = update.callback_query;
     await tg(token, 'answerCallbackQuery', { callback_query_id: q.id });
+    if (q.data === 'kaspi:login') {
+      const saved = await getSetting(db, 'kaspi_phone', '');
+      await setState(db, { step: 'kaspi_phone' });
+      await send(`Отправьте номер <b>кассира</b> Kaspi Pay — 10 цифр без +7, например <code>7071234567</code>.${saved ? `\nПрошлый номер: <code>${saved}</code>` : ''}\n\n⚠️ Это должен быть отдельный кассир, не ваш личный вход в Kaspi Pay.`);
+      return;
+    }
+    if (q.data === 'kaspi:check') {
+      try {
+        const st = await checkSession(env);
+        await send(st.active ? `✅ Сессия Kaspi активна${st.orgName ? ` (${esc(st.orgName)})` : ''}` : `❌ Сессия неактивна: ${esc(st.reason || '')}\nНажмите 🔑 Войти в Kaspi.`);
+      } catch (e) { await send(`❌ Шлюз не отвечает: ${esc(String(e).slice(0, 200))}`); }
+      return;
+    }
+    if (q.data?.startsWith('kaspi:use:')) {
+      const to = q.data.slice(10);
+      if (to === 'kaspi') {
+        let st; try { st = await checkSession(env); } catch (e) { st = { active: false, reason: String(e) }; }
+        if (!st.active) { await send(`Сначала войдите в Kaspi — сессия неактивна (${esc(st.reason || '')}).`); return; }
+      }
+      await setSetting(db, 'payment_provider', to);
+      const p = await kaspiPanel(env);
+      await tg(token, 'editMessageText', { chat_id: from.id, message_id: q.message.message_id, text: p.text, parse_mode: 'HTML', reply_markup: p.kb });
+      return;
+    }
     if (q.data?.startsWith('ads:')) {
       await tg(token, 'editMessageText', {
         chat_id: from.id, message_id: q.message.message_id,
@@ -154,6 +209,35 @@ export async function handleAdminUpdate(env, update) {
 
   const m = update.message;
   const text = (m.text || '').trim();
+
+  // Пошаговый вход в Kaspi: номер кассира → код из SMS
+  const st = await getState(db);
+  if (st.step === 'kaspi_phone' && /^\+?[\d\s()-]{10,16}$/.test(text)) {
+    const phone = text.replace(/\D/g, '').slice(-10);
+    try {
+      const pid = await loginStart(env, phone);
+      await setSetting(db, 'kaspi_phone', phone);
+      await setState(db, { step: 'kaspi_otp', pid });
+      await send('📩 SMS с кодом отправлено на номер кассира. Пришлите код сюда (только цифры).');
+    } catch (e) {
+      await setState(db, {});
+      await send(`❌ Kaspi не принял номер: ${esc(String(e.message || e).slice(0, 300))}`);
+    }
+    return;
+  }
+  if (st.step === 'kaspi_otp' && /^\d{4,6}$/.test(text)) {
+    try {
+      const s2 = await loginFinish(env, st.pid, text);
+      await setState(db, {});
+      await setSetting(db, 'kaspi_alert_at', '0');
+      const p = await kaspiPanel(env);
+      await send(`✅ Вход в Kaspi выполнен${s2.orgName ? `: ${esc(s2.orgName)}` : ''}.\n\n` + p.text, { reply_markup: p.kb });
+    } catch (e) {
+      await send(`❌ ${esc(String(e.message || e).slice(0, 300))}\nПопробуйте ещё раз: 🏦 Kaspi → Войти.`);
+      await setState(db, {});
+    }
+    return;
+  }
 
   // Ответ клиенту: «Ответить» на пересланное сообщение с #id
   const replied = m.reply_to_message?.text || '';
@@ -187,6 +271,21 @@ export async function handleAdminUpdate(env, update) {
     await send(next === '1'
       ? '🔔 Уведомления о каждом лиде и нажатии «Оплатить» <b>включены</b>.\nО продажах уведомляю всегда.'
       : '🔕 Уведомления о лидах <b>выключены</b>.\nО продажах всё равно буду сообщать.');
+  } else if (text === '🏦 Kaspi' || text === '/kaspi') {
+    const p = await kaspiPanel(env);
+    await send(p.text, { reply_markup: p.kb });
+  } else if (text.startsWith('/grant')) {
+    // Выдать доступ вручную (оплата проверена в Kaspi Pay): /grant <telegram_id>
+    const id = Number(text.split(/\s+/)[1]);
+    const u = id && await db.prepare('SELECT tg_id FROM users WHERE tg_id=?').bind(id).first();
+    if (!u) { await send('Укажите ID: /grant 123456789 (пользователь должен был нажать /start).'); return; }
+    const already = await db.prepare('SELECT paid_at FROM users WHERE tg_id=?').bind(id).first();
+    if (already?.paid_at && !/\bforce\b/.test(text)) { await send(`У пользователя ${id} уже есть доступ. Если это повторная покупка: /grant ${id} force`); return; }
+    const r = await db.prepare(
+      `INSERT INTO payments (tg_id, order_id, status, amount, created_at, is_test) VALUES (?,?, 'pending', ?, ?, 0) RETURNING id`
+    ).bind(id, `manual_${id}_${now()}`, Number(env.PRICE || 4990), now()).first();
+    await grantAccess(env, r.id);
+    await send('✅ Доступ выдан, продажа засчитана.');
   } else if (text.startsWith('/reset')) {
     // Для тестов: забыть пользователя, чтобы его /start снова считался новым лидом. /reset или /reset <telegram_id>
     const id = Number(text.split(/\s+/)[1] || from.id);

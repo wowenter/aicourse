@@ -3,6 +3,7 @@ import { now, getUserWithClick, getSetting, setSetting } from './db.js';
 import { tg, esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
 import { createPaymentLink } from './apipay.js';
+import { paymentProvider, createKaspiPayment } from './kaspi.js';
 import * as T from './texts.js';
 
 const price = (env) => Number(env.PRICE || 4990);
@@ -150,10 +151,15 @@ async function onPay(env, from) {
     }
   }
 
+  if ((await paymentProvider(env)) === 'kaspi') {
+    await payViaKaspi(env, from, u);
+    return;
+  }
+
   // Используем уже созданную ссылку, если ей меньше 23 часов
   let pay = await db.prepare(
     `SELECT * FROM payments WHERE tg_id=? AND status='pending' AND is_test=0 AND payment_url IS NOT NULL
-     AND amount=? AND created_at > ? ORDER BY id DESC LIMIT 1`
+     AND order_id NOT LIKE 'kq%' AND amount=? AND created_at > ? ORDER BY id DESC LIMIT 1`
   ).bind(from.id, price(env), t - 23 * 3600).first();
 
   if (!pay) {
@@ -184,6 +190,40 @@ async function onPay(env, from) {
   await tg(env.SALES_BOT_TOKEN, 'sendMessage', {
     chat_id: from.id,
     text: T.PAY_LINK_TEXT(price(env)),
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [[{ text: T.PAY_LINK_BUTTON, url: pay.payment_url }]] },
+  });
+}
+
+// Оплата через свою кассу (шлюз Kaspi). Ссылка живёт ~3 минуты, поэтому переиспользуем только свежую.
+async function payViaKaspi(env, from, u) {
+  const db = env.DB;
+  const t = now();
+  let pay = await db.prepare(
+    `SELECT * FROM payments WHERE tg_id=? AND status='pending' AND order_id LIKE 'kq%' AND amount=?
+     AND created_at > ? ORDER BY id DESC LIMIT 1`
+  ).bind(from.id, price(env), t - 150).first();
+
+  if (!pay) {
+    try {
+      const k = await createKaspiPayment(env, price(env));
+      const orderId = `kq${from.id}_${t}`;
+      await db.prepare(
+        `INSERT INTO payments (tg_id, order_id, invoice_id, payment_url, status, amount, created_at, is_test)
+         VALUES (?,?,?,?,'pending',?,?,0)`
+      ).bind(from.id, orderId, k.operationId, k.url, price(env), t).run();
+      pay = { payment_url: k.url };
+    } catch (e) {
+      console.log('kaspi create failed', String(e));
+      await tg(env.SALES_BOT_TOKEN, 'sendMessage', { chat_id: from.id, text: T.PAY_ERROR_TEXT });
+      await notifyAdmins(env, `⚠️ Своя касса Kaspi: не удалось создать ссылку для ${userLabel(u)}:\n<code>${esc(String(e).slice(0, 300))}</code>\n\nЕсли сессия слетела — 🏦 Kaspi → Войти. Или переключите оплату на ApiPay.`);
+      return;
+    }
+  }
+
+  await tg(env.SALES_BOT_TOKEN, 'sendMessage', {
+    chat_id: from.id,
+    text: T.PAY_LINK_TEXT(price(env)) + '\n\n' + T.KASPI_LINK_NOTE,
     parse_mode: 'HTML',
     reply_markup: { inline_keyboard: [[{ text: T.PAY_LINK_BUTTON, url: pay.payment_url }]] },
   });

@@ -69,3 +69,28 @@ TikTok сам подставит названия кампании, группы
 📥 Выгрузка — все лиды в файл для Excel
 🔔 Уведомления — вкл/выкл сообщения о каждом лиде (о продажах — всегда)
 Вопросы клиентов приходят сюда — ответьте на сообщение, и бот перешлёт ответ клиенту.
+
+---
+
+## Своя касса Kaspi (вместо ApiPay)
+
+Папка `gateway/` — платёжный шлюз на основе открытого проекта [tapter-dev/kaspi-pos-automation](https://github.com/tapter-dev/kaspi-pos-automation) (MIT). Работает на Railway, входит в Kaspi Pay как отдельный кассир и сообщает боту об оплатах.
+
+⚠️ Неофициальная интеграция: Kaspi может изменить API или ограничить такие подключения. ApiPay оставлен запасным вариантом.
+
+### Railway
+1. New Project → Deploy from GitHub → `wowenter/aicourse`.
+2. Settings → **Root Directory**: `gateway`.
+3. Variables: `TOKEN_SECRET_KEY` (64 hex), `GATEWAY_KEY`, `WEBHOOK_SECRET`, `DATA_DIR=/data`,
+   `WEBHOOK_URL=https://aicourse.arsennumberone.workers.dev/kaspi/webhook`.
+4. **Volume** с путём монтирования `/data` (иначе после перезапуска придётся входить заново).
+5. Settings → Networking → **Generate Domain** — этот адрес вписать в `wrangler.toml` → `KASPI_GATEWAY_URL`.
+
+### Cloudflare (секреты)
+`KASPI_GATEWAY_KEY` = `GATEWAY_KEY`, `KASPI_WEBHOOK_SECRET` = `WEBHOOK_SECRET`.
+
+### Админ-бот → 🏦 Kaspi
+- **Войти в Kaspi** — номер кассира → код из SMS.
+- **Переключить на свою кассу / на ApiPay**.
+- Каждые 15 минут бот проверяет сессию. Если она слетела — пишет вам и сам переключает оплату на ApiPay.
+- `/grant <telegram_id>` — выдать доступ вручную, если оплата прошла, а уведомление потерялось.

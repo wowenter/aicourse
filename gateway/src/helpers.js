@@ -1,0 +1,107 @@
+import crypto from 'crypto';
+import fetch from 'node-fetch';
+import { DEVICE, APP, UA_NATIVE } from './config.js';
+import { computeTokenSnMac, computeXSign } from './crypto.js';
+
+// ─── Utilities ───
+
+export const generateUUID = () => crypto.randomUUID().toUpperCase();
+
+// Kaspi expects a KZ mobile number as 10 digits WITHOUT the country code (7001234567). With the leading
+// country code (77001234567 / +77001234567 / 87001234567) Kaspi replies that the number does not belong
+// to the operator. Strip formatting and a leading 7/8 from 11-digit input; anything else is returned as digits.
+export const normalizePhone = (input) => {
+  const digits = String(input ?? '').replace(/\D/g, '');
+  return digits.length === 11 && /^[78]/.test(digits) ? digits.slice(1) : digits;
+};
+
+export const nowISO = () => {
+  const d = new Date();
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const hh = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0');
+  const mm = String(Math.abs(off) % 60).padStart(2, '0');
+  return (
+    d
+      .toISOString()
+      .replace('Z', '')
+      .replace(/\.\d{3}/, `.${String(d.getMilliseconds()).padStart(3, '0')}`) +
+    sign +
+    hh +
+    mm
+  );
+};
+
+// ─── Cookie builder ───
+
+export const entranceCookie = (extraUserToken) => {
+  let c = `deviceId=${DEVICE.deviceId}; installId=${DEVICE.installId}; is_mobile_app=true; locale=${APP.locale}; ma_bld=${APP.build}; ma_platform_type=${APP.platform}; ma_platform_ver=${APP.platformVer}; ma_ver=${APP.version}; pk=${DEVICE.pk}; pkTag=${DEVICE.pkTag}; xs=R:0|E:0|RH:0|N:0`;
+  if (extraUserToken) c += `; user_token=${extraUserToken}`;
+  return c;
+};
+
+// ─── Extract user_token from set-cookie ───
+
+export const extractUserToken = (resp) => {
+  const raw = resp.headers.raw()['set-cookie'] || [];
+  for (const c of raw) {
+    const m = c.match(/user_token=([^;]+)/);
+    if (m) return m[1];
+  }
+  return null;
+};
+
+// ─── Logged fetch wrapper ───
+
+// Подробный лог запросов (с токенами) — только если LOG_HTTP=1. По умолчанию — одна короткая строка.
+const VERBOSE = process.env.LOG_HTTP === '1';
+
+export const loggedFetch = async (url, options = {}) => {
+  const method = (options.method || 'GET').toUpperCase();
+  if (VERBOSE) {
+    console.log(`\n>>> ${method} ${url}`);
+    if (options.headers) console.log('>>> Headers:', JSON.stringify(options.headers, null, 2));
+    if (options.body) console.log('>>> Body:', options.body);
+  }
+  const resp = await fetch(url, options);
+  if (VERBOSE) {
+    const cloned = resp.clone();
+    let body;
+    try { body = await cloned.text(); } catch { body = '[unreadable]'; }
+    console.log(`<<< ${resp.status} ${resp.statusText}`);
+    console.log('<<< Response:', body);
+  } else {
+    console.log(`${method} ${url.split('?')[0]} -> ${resp.status}`);
+  }
+  return resp;
+};
+
+// ─── Signed QR-pay headers (session passed as parameter) ───
+
+export const signedQrPayHeaders = (url, session, body) => {
+  const xsh =
+    'url,X-Install-ID,X-PI,X-App-Bld,X-Platform-Ver,X-Locale,X-App-Ver,X-Device-ID,X-SV,X-Time,X-Platform-Type,X-Call,X-Kb-TokenSnMac,X-Kb-TokenSn';
+  const headers = {
+    'X-Kb-TokenSn': session.tokenSN,
+    'X-Kb-TokenSnMac': computeTokenSnMac(session.tokenSN, session.decryptedSecret),
+    'X-PI': session.profileId != null ? String(session.profileId) : '',
+    'X-Install-ID': DEVICE.installId,
+    'X-Device-ID': DEVICE.deviceId,
+    'X-App-Ver': APP.version,
+    'X-App-Bld': APP.build,
+    'X-Platform-Type': APP.platform,
+    'X-Platform-Ver': APP.platformVer,
+    'X-Locale': APP.locale,
+    'X-Time': nowISO(),
+    'X-Request-ID': generateUUID(),
+    'X-Call': 'notConnected',
+    'X-SV': '2',
+    'X-SH': xsh,
+    'User-Agent': UA_NATIVE,
+    Accept: '*/*',
+    'Accept-Language': 'ru',
+    'Accept-Encoding': 'gzip, deflate, br',
+  };
+  headers['X-Sign'] = computeXSign(url, headers, xsh, body);
+  return headers;
+};
