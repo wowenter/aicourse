@@ -1,0 +1,13 @@
+aipay.duckdns.org {
+    handle /pay/* {
+        request_body {
+            max_size 2KB
+        }
+        reverse_proxy https://aicourse.arsennumberone.workers.dev {
+            header_up Host aicourse.arsennumberone.workers.dev
+        }
+    }
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
+}

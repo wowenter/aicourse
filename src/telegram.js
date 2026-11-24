@@ -4,6 +4,7 @@ export async function tg(token, method, body = {}) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
     });
     const j = await r.json();
     if (!j.ok) console.log('telegram error', method, JSON.stringify(j));
@@ -29,3 +30,4 @@ export function userLabel(u) {
   const name = esc(u.first_name || 'Без имени');
   return u.username ? `${name} (@${esc(u.username)})` : `${name} (id ${u.tg_id})`;
 }
+

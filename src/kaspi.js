@@ -19,7 +19,7 @@ async function call(env, method, path, { body, session } = {}) {
     headers['X-Vtoken-Secret'] = session.vtokenSecret;
     headers['X-Profile-Id'] = String(session.profileId ?? '');
   }
-  const r = await fetch(gw(env) + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(gw(env) + path, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(25000) });
   const text = await r.text();
   let j; try { j = JSON.parse(text); } catch { j = { raw: text.slice(0, 300) }; }
   return { status: r.status, ok: r.ok, data: j };
@@ -72,3 +72,16 @@ export async function createKaspiPayment(env, amount) {
   }
   return { url: d.QrToken, operationId: String(d.QrOperationId), expireDate: d.ExpireDate || null };
 }
+
+export async function createKaspiInvoice(env, phoneNumber, amount) {
+  const s = await getKaspiSession(env);
+  if (!s) throw new Error('Cashier session missing');
+  const r = await call(env, 'POST', '/api/invoice/create', {
+    body: { phoneNumber, amount: Number(amount), comment: String(env.PRODUCT_NAME || 'Курс').slice(0, 100) },
+    session: s,
+  });
+  const id = r.data?.Data?.QrOperationId;
+  if (!r.ok || id == null || !/^\d+$/.test(String(id))) throw new Error('Invoice creation not confirmed');
+  return { operationId: String(id) };
+}
+

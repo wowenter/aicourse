@@ -64,7 +64,7 @@ router.post('/create', async (req, res) => {
           qrToken: d.QrToken,
           expireDate: d.ExpireDate,
           receiptUrl: d.ReceiptUrl,
-          amount: d.Amount,
+          amount: d.Amount ?? Number(amount),
           pollingIntervals: {
             scanWaitTimeout: Number(opts.qrCodeScanWaitTimeout) || 180,
             scanPollingInterval: Number(opts.qrCodeScanEventPollingInterval) || 3,
@@ -100,3 +100,4 @@ router.get('/status', async (req, res) => {
 });
 
 export default router;
+

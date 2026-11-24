@@ -206,46 +206,27 @@ const sendWebhook = async (hook, payload, attempt = 1) => {
     saveRetries();
   } catch (err) {
     logger.error('WEBHOOK', `→ ${hook.url} | attempt ${attempt} FAILED: ${err.message}`);
-    if (attempt < 3) {
-      // Save retry to disk so it survives restarts
-      pendingRetries.push({
-        hook,
-        payload,
-        attempt: attempt + 1,
-        executeAfter: Date.now() + (attempt === 1 ? 5000 : 30000),
-      });
-      saveRetries();
-    } else {
-      logger.error('WEBHOOK', `→ ${hook.url} | FAILED after 3 retries`);
-      // Remove from pending retries
-      pendingRetries = pendingRetries.filter(
-        (r) =>
-          !(r.hook.url === hook.url && r.payload.paymentId === payload.paymentId && r.payload.event === payload.event),
-      );
-      saveRetries();
-    }
+    // Persist before delivery, retain failures until acknowledged, capped exponential backoff.
+    pendingRetries = pendingRetries.filter(r => !(r.hook.url === hook.url && r.payload.paymentId === payload.paymentId && r.payload.event === payload.event));
+    pendingRetries.push({ hook, payload, attempt: attempt + 1,
+      executeAfter: Date.now() + Math.min(3600000, 5000 * 2 ** Math.min(attempt - 1, 10)) });
+    saveRetries();
   }
 };
 
 const sendWebhooks = (event, payload) => {
-  const hooks = getWebhooksByEvent(event);
-  for (const hook of hooks) {
-    sendWebhook(hook, payload);
+  for (const hook of getWebhooksByEvent(event)) {
+    if (!pendingRetries.some(r => r.hook.url === hook.url && r.payload.paymentId === payload.paymentId && r.payload.event === payload.event)) {
+      pendingRetries.push({hook, payload, attempt: 1, executeAfter: Date.now()});
+    }
   }
+  saveRetries();
 };
 
-// ─── Process pending retries ───
-
 const processRetries = async () => {
-  const now = Date.now();
-  const due = pendingRetries.filter((r) => r.executeAfter <= now);
-  // Remove due items from list before executing (they'll be re-added on failure)
-  pendingRetries = pendingRetries.filter((r) => r.executeAfter > now);
-  saveRetries();
-
-  for (const r of due) {
-    await sendWebhook(r.hook, r.payload, r.attempt);
-  }
+  const due = pendingRetries.filter(r => r.executeAfter <= Date.now()).slice(0, 20);
+  // Leave items on disk while sending so a restart cannot silently lose the event.
+  for (const r of due) await sendWebhook(r.hook, r.payload, r.attempt);
 };
 
 // ─── Resolve event from status ───
@@ -253,10 +234,10 @@ const processRetries = async () => {
 const resolveEvent = (type, status) => {
   if (type === 'qr') {
     if (QR_INTERMEDIATE.has(status)) return null;
-    return QR_FINAL_STATUSES[status] || 'payment.failed';
+    return QR_FINAL_STATUSES[status] || null;
   } else {
     if (INVOICE_INTERMEDIATE.has(status)) return null;
-    return INVOICE_FINAL_STATUSES[status] || 'payment.failed';
+    return INVOICE_FINAL_STATUSES[status] || null;
   }
 };
 
@@ -266,21 +247,6 @@ const pollOnce = async () => {
   let changed = false;
 
   for (const [id, entry] of trackedPayments) {
-    // TTL check via expireDate
-    if (entry.meta.expireDate) {
-      const expiry = new Date(entry.meta.expireDate).getTime();
-      if (Date.now() > expiry && resolveEvent(entry.type, entry.status) === null) {
-        logger.info('POLLING', `Payment ${id} expired (TTL)`);
-        sendWebhooks(
-          'payment.expired',
-          buildPayload('payment.expired', entry, { Status: 'Expired', StatusDesc: 'Время оплаты истекло' }),
-        );
-        trackedPayments.delete(id);
-        changed = true;
-        continue;
-      }
-    }
-
     const result = await fetchStatus(entry);
 
     // Handle session expiration
@@ -361,7 +327,7 @@ const buildPayload = (event, entry, data) => ({
   type: entry.type,
   status: data.Status || entry.status,
   statusDesc: data.StatusDesc || '',
-  amount: entry.meta.amount || data.Amount || null,
+  amount: data.Amount ?? entry.meta.amount ?? null,
   qrToken: entry.meta.qrToken || null,
   receiptUrl: entry.meta.receiptUrl || data.ReceiptUrl || null,
   orderNumber: entry.meta.orderNumber || data.OrderNumber || null,
@@ -417,3 +383,4 @@ export const stopPolling = () => {
 };
 
 export const getTrackedPayments = () => Object.fromEntries(trackedPayments);
+

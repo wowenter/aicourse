@@ -5,6 +5,8 @@ import { sendTikTokEvent } from './tiktok.js';
 import { createPaymentLink } from './apipay.js';
 import { paymentProvider, createKaspiPayment } from './kaspi.js';
 import * as T from './texts.js';
+import { checkoutLink } from './checkout.js';
+import { deliverPayment } from './delivery.js';
 
 const price = (env) => Number(env.PRICE || 4990);
 
@@ -159,7 +161,7 @@ async function onPay(env, from) {
   // Используем уже созданную ссылку, если ей меньше 23 часов
   let pay = await db.prepare(
     `SELECT * FROM payments WHERE tg_id=? AND status='pending' AND is_test=0 AND payment_url IS NOT NULL
-     AND order_id NOT LIKE 'kq%' AND amount=? AND created_at > ? ORDER BY id DESC LIMIT 1`
+     AND order_id NOT LIKE 'kq%' AND order_id NOT LIKE 'ki%' AND amount=? AND created_at > ? ORDER BY id DESC LIMIT 1`
   ).bind(from.id, price(env), t - 23 * 3600).first();
 
   if (!pay) {
@@ -207,12 +209,12 @@ async function payViaKaspi(env, from, u) {
   if (!pay) {
     try {
       const k = await createKaspiPayment(env, price(env));
-      const orderId = `kq${from.id}_${t}`;
+      const orderId = `kq${from.id}_${crypto.randomUUID()}`;
       await db.prepare(
         `INSERT INTO payments (tg_id, order_id, invoice_id, payment_url, status, amount, created_at, is_test)
-         VALUES (?,?,?,?,'pending',?,?,0)`
-      ).bind(from.id, orderId, k.operationId, k.url, price(env), t).run();
-      pay = { payment_url: k.url };
+         VALUES (?,?,?,?,'pending',?,?,0) RETURNING *`
+      ).bind(from.id, orderId, k.operationId, k.url, price(env), t).first();
+      pay = await db.prepare('SELECT * FROM payments WHERE order_id=?').bind(orderId).first();
     } catch (e) {
       console.log('kaspi create failed', String(e));
       await tg(env.SALES_BOT_TOKEN, 'sendMessage', { chat_id: from.id, text: T.PAY_ERROR_TEXT });
@@ -223,53 +225,24 @@ async function payViaKaspi(env, from, u) {
 
   await tg(env.SALES_BOT_TOKEN, 'sendMessage', {
     chat_id: from.id,
-    text: T.PAY_LINK_TEXT(price(env)) + '\n\n' + T.KASPI_LINK_NOTE,
+    text: T.PAY_LINK_TEXT(price(env)),
     parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: [[{ text: T.PAY_LINK_BUTTON, url: pay.payment_url }]] },
+    reply_markup: { inline_keyboard: [[{ text: T.PAY_LINK_BUTTON,
+      url: (await getSetting(db, 'checkout_enabled', '0')) === '1' ? await checkoutLink(env, pay.id) : pay.payment_url,
+    }]] },
   });
 }
 
 // ------------------------------------------------------------------ оплата прошла
-/** Выдаёт доступ. Безопасно вызывать повторно — второй раз ничего не сделает. */
+/** Payment recording and delivery queue are committed together. Retries never credit twice. */
 export async function grantAccess(env, paymentId) {
-  const db = env.DB;
   const t = now();
-  const res = await db.prepare(`UPDATE payments SET status='paid', paid_at=? WHERE id=? AND status!='paid'`)
-    .bind(t, paymentId).run();
-  if (!res.meta.changes) return false; // уже обработан
-
-  const p = await db.prepare('SELECT * FROM payments WHERE id=?').bind(paymentId).first();
-  const isTest = p.is_test === 1;
-
-  let link = env.COURSE_LINK || '';
-  if (env.CHANNEL_ID) {
-    const r = await tg(env.SALES_BOT_TOKEN, 'createChatInviteLink', {
-      chat_id: env.CHANNEL_ID, member_limit: 1, name: `tg ${p.tg_id}`.slice(0, 32),
-    });
-    if (r.ok) link = r.result.invite_link;
-  }
-  if (!link) link = '(ссылка на курс не настроена — напишите в этот чат)';
-
-  await db.prepare(
-    `UPDATE users SET paid_at=COALESCE(paid_at, ?), amount=COALESCE(amount,0)+?, access_link=?, next_reminder_at=NULL WHERE tg_id=?`
-  ).bind(t, isTest ? 0 : p.amount, link, p.tg_id).run();
-
-  await tg(env.SALES_BOT_TOKEN, 'sendMessage', { chat_id: p.tg_id, text: T.PAID_TEXT(link) });
-
-  const u = await getUserWithClick(db, p.tg_id);
-  if (!isTest || env.TIKTOK_TEST_EVENT_CODE) {
-    await sendTikTokEvent(env, 'Purchase', u, { eventId: `pur_${p.id}`, value: p.amount });
-  }
-
-  const day = await db.prepare(
-    `SELECT COUNT(*) n, COALESCE(SUM(amount),0) s FROM payments WHERE status='paid' AND is_test=0 AND paid_at>=?`
-  ).bind(t - ((t + 5 * 3600) % 86400)).first();
-
-  await notifyAdmins(env,
-    `💰 <b>Новая продажа${isTest ? ' (ТЕСТ)' : ''}!</b>\n` +
-    `👤 ${userLabel(u)}\n💵 ${p.amount} ₸\n📍 Источник: ${adLabel(u)}\n\n` +
-    `Сегодня: ${day.n} продаж на ${day.s} ₸`);
-  return true;
+  await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO payment_delivery(payment_id)
+      SELECT id FROM payments WHERE id=? AND status!='paid'`).bind(paymentId),
+    env.DB.prepare("UPDATE payments SET status='paid',paid_at=COALESCE(paid_at,?) WHERE id=?").bind(t, paymentId),
+  ]);
+  return deliverPayment(env, paymentId);
 }
 
 // ------------------------------------------------------------------ напоминания (cron)
@@ -296,3 +269,4 @@ export async function runReminders(env) {
       .bind(i + 1, blocked ? null : next, blocked, u.tg_id).run();
   }
 }
+

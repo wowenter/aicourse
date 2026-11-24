@@ -25,12 +25,13 @@ LANDING_URL = "https://wowenter.github.io/aicourse/"
 TIKTOK_PIXEL_ID = "DC299MRC77U0A5LSGC40"
 # Закрытый канал с курсом (бот продаж — админ с правом приглашать)
 CHANNEL_ID = "-1003567231104"
-# Своя касса Kaspi (шлюз gateway/ на Railway). Адрес шлюза — после деплоя на Railway
-KASPI_GATEWAY_URL = ""
+# Своя касса Kaspi (шлюз gateway/ на VPS). Адрес шлюза — после деплоя на VPS
+KASPI_GATEWAY_URL = "https://aipay.duckdns.org"
+CHECKOUT_BASE_URL = "https://aipay.duckdns.org"
 # Способ оплаты по умолчанию (переключается в админ-боте: 🏦 Kaspi)
-PAYMENT_PROVIDER = "apipay"
+PAYMENT_PROVIDER = "kaspi"
 # 1 = принимать тестовые оплаты из песочницы ApiPay, 0 = только реальные
-APIPAY_SANDBOX = "1"
+APIPAY_SANDBOX = "0"
 
 # Секреты задаются в Cloudflare: Settings -> Variables and Secrets (тип Secret):
 #   SALES_BOT_TOKEN        токен бота продаж (@ii_video_foto_bot)
@@ -41,6 +42,7 @@ APIPAY_SANDBOX = "1"
 #   TIKTOK_TEST_EVENT_CODE (необязательно) код из вкладки Test Events
 #   APIPAY_API_KEY         ключ API из кабинета ApiPay
 #   APIPAY_WEBHOOK_SECRET  секрет подписи вебхуков ApiPay
-#   KASPI_GATEWAY_KEY      пароль шлюза Kaspi (такой же, как GATEWAY_KEY на Railway)
-#   KASPI_WEBHOOK_SECRET   секрет уведомлений шлюза (такой же, как WEBHOOK_SECRET на Railway)
+#   KASPI_GATEWAY_KEY      пароль шлюза Kaspi (такой же, как GATEWAY_KEY на VPS)
+#   KASPI_WEBHOOK_SECRET   секрет уведомлений шлюза (такой же, как WEBHOOK_SECRET на VPS)
 #   COURSE_LINK            (запасной вариант) готовая ссылка на канал
+

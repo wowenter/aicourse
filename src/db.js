@@ -14,6 +14,15 @@ const SCHEMA = [
      static_qr_id TEXT, invoice_id TEXT, payment_url TEXT, status TEXT,
      amount INTEGER, created_at INTEGER, paid_at INTEGER, is_test INTEGER DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`,
+  `CREATE TABLE IF NOT EXISTS checkouts (
+     token TEXT PRIMARY KEY, payment_id INTEGER UNIQUE NOT NULL,
+     created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+     invoice_payment_id INTEGER, invoice_state TEXT DEFAULT 'none')`,
+  `CREATE TABLE IF NOT EXISTS payment_delivery (
+     payment_id INTEGER PRIMARY KEY, state TEXT DEFAULT 'pending',
+     lock_until INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0,
+     access_link TEXT, credited_at INTEGER, delivered_at INTEGER)`,
+  `CREATE INDEX IF NOT EXISTS idx_pay_invoice ON payments(invoice_id)`,
   `CREATE INDEX IF NOT EXISTS idx_users_rem ON users(next_reminder_at)`,
   `CREATE INDEX IF NOT EXISTS idx_users_started ON users(started_at)`,
   `CREATE INDEX IF NOT EXISTS idx_pay_qr ON payments(static_qr_id)`,
@@ -55,3 +64,4 @@ export function fmtTime(ts) {
   if (!ts) return '';
   return new Date((ts + TZ) * 1000).toISOString().slice(0, 16).replace('T', ' ');
 }
+

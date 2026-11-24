@@ -70,7 +70,7 @@ router.post('/create', async (req, res) => {
           profileId: req.session.profileId,
         },
         {
-          amount: d.Amount,
+          amount: d.Amount ?? Number(amount),
           clientMobile: d.ClientMobile,
           receiptUrl: d.ReceiptUrl,
           orderNumber: d.OrderNumber,
@@ -138,3 +138,4 @@ router.post('/history', async (req, res) => {
 });
 
 export default router;
+

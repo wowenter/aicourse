@@ -8,6 +8,8 @@ import { paymentProvider, checkSession } from './kaspi.js';
 import { getSetting, setSetting } from './db.js';
 import { esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
+import { handleCheckout } from './checkout.js';
+import { retryDeliveries } from './delivery.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -102,38 +104,36 @@ async function apipayWebhook(req, env, ctx) {
 }
 
 // Уведомления от своего шлюза Kaspi (gateway/)
-async function kaspiWebhook(req, env, ctx) {
+export async function kaspiWebhook(req, env, ctx) {
   const raw = await req.text();
   if (!(await verifyHmac(env.KASPI_WEBHOOK_SECRET, raw, req.headers.get('X-Webhook-Signature')))) {
-    console.log('kaspi webhook: bad signature');
     return json({ error: 'bad signature' }, 401);
   }
-  let b; try { b = JSON.parse(raw); } catch { return json({ ok: true }); }
-  console.log('kaspi webhook', b.event, b.paymentId, b.status);
-
-  ctx.waitUntil((async () => {
-    const db = env.DB;
-    const p = await db.prepare(`SELECT * FROM payments WHERE invoice_id=? AND order_id LIKE 'kq%' ORDER BY id DESC`)
-      .bind(String(b.paymentId)).first();
+  let b; try { b = JSON.parse(raw); } catch { return json({ error: 'invalid JSON' }, 400); }
+  if (!b.paymentId || !['qr', 'invoice'].includes(b.type)) return json({error: 'payment ID/type required'}, 400);
+  try {
+    const p = await env.DB.prepare(`SELECT * FROM payments WHERE invoice_id=?
+      AND order_id LIKE ? ORDER BY id DESC LIMIT 1`).bind(String(b.paymentId), b.type === 'invoice' ? 'ki%' : 'kq%').first();
     if (b.event === 'payment.success') {
-      if (!p) {
-        await notifyAdmins(env, `⚠️ Kaspi: пришла оплата, но не нашёл, чей это платёж.\n<code>${esc(JSON.stringify({ id: b.paymentId, amount: b.amount }))}</code>`);
-        return;
-      }
-      if (b.amount != null && Number(b.amount) + 0.001 < Number(p.amount)) {
-        await notifyAdmins(env, `⚠️ Kaspi: сумма оплаты ${b.amount} меньше цены ${p.amount} (платёж ${p.id}). Доступ не выдан — проверьте вручную.`);
-        return;
+      // The gateway may notify before invoice creation has committed the operation ID.
+      if (!p) return json({error: 'payment not recorded yet'}, 503);
+      const amount = Number(b.amount);
+      if (b.status !== 'Processed' || !Number.isFinite(amount) || amount <= 0 || amount + 0.001 < Number(p.amount)) {
+        ctx.waitUntil(notifyAdmins(env, `⚠️ Kaspi: статус или сумма платежа ${p.id} не прошли проверку. Доступ не выдан.`));
+        return json({error: 'payment verification failed'}, 422);
       }
       await grantAccess(env, p.id);
     } else if (b.event === 'payment.lost' || b.status === 'SessionExpired') {
-      const u = p ? await db.prepare('SELECT * FROM users WHERE tg_id=?').bind(p.tg_id).first() : null;
-      await notifyAdmins(env,
-        `⚠️ <b>Kaspi: сессия кассира слетела</b>, статус оплаты неизвестен${u ? ` (${userLabel(u)})` : ''}.\n` +
-        `Проверьте оплату в Kaspi Pay. Если человек оплатил — выдайте доступ командой <code>/grant ${p ? p.tg_id : 'ID'}</code>.\n` +
-        `И войдите заново: 🏦 Kaspi → Войти.`);
+      ctx.waitUntil(notifyAdmins(env, `⚠️ Kaspi: статус платежа ${p?.id || b.paymentId} неизвестен. Проверьте его в Kaspi Pay и сессию кассира в меню 🏦 Kaspi.`));
+    } else if (p && ['payment.failed', 'payment.expired'].includes(b.event)) {
+      await env.DB.prepare("UPDATE payments SET status=? WHERE id=? AND status='pending'")
+        .bind(b.event === 'payment.expired' ? 'expired' : 'failed', p.id).run();
     }
-  })());
-  return json({ ok: true });
+    return json({ok: true});
+  } catch (e) {
+    console.error('kaspi webhook processing failed', e?.name);
+    return json({error: 'retry later'}, 503);
+  }
 }
 
 // Каждые 15 минут: жива ли сессия кассира. Если нет — предупредить и переключиться на ApiPay (если он настроен).
@@ -178,6 +178,11 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname;
 
+    if (path.startsWith('/pay/')) {
+      try { return await handleCheckout(req, env); }
+      catch (e) { console.error('checkout failed', e?.name); return json({error: 'Временная ошибка. Вернитесь в бот.'}, 503, {'Cache-Control': 'no-store'}); }
+    }
+
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
     if (req.method === 'POST' && path === '/api/click') return saveClick(req, env, ctx);
@@ -201,7 +206,9 @@ export default {
   async scheduled(event, env, ctx) {
     await ensureSchema(env.DB);
     ctx.waitUntil(runReminders(env));
+    ctx.waitUntil(retryDeliveries(env));
     const minute = new Date(event.scheduledTime || Date.now()).getUTCMinutes();
     if (minute % 15 === 0) ctx.waitUntil(kaspiHealth(env).catch((e) => console.log('kaspiHealth', String(e))));
   },
 };
+

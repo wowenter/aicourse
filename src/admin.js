@@ -248,7 +248,23 @@ export async function handleAdminUpdate(env, update) {
     return;
   }
 
-  if (text === '/start' || text === '/menu') {
+  if (text === '/checkout_on') {
+    try {
+      const base = String(env.CHECKOUT_BASE_URL || env.KASPI_GATEWAY_URL || '').replace(/\/+$/, '');
+      const response = await fetch(base + '/pay/health', {signal: AbortSignal.timeout(10000)});
+      const body = await response.json();
+      if (!response.ok || body.checkout !== 1) throw new Error('Checkout route unavailable');
+      await setSetting(db, 'checkout_enabled', '1');
+      await send('✅ Страница оплаты включена: автопереход в Kaspi и счёт по номеру телефона. Новые кнопки оплаты ведут на ваш домен.');
+    } catch {
+      await send('❌ Страница пока недоступна. Сначала примените обновление сервера; затем повторите /checkout_on.');
+    }
+    return;
+  } else if (text === '/checkout_off') {
+    await setSetting(db, 'checkout_enabled', '0');
+    await send('Страница отключена: новые кнопки снова ведут прямо в Kaspi.');
+    return;
+  } else if (text === '/start' || text === '/menu') {
     await send('👋 Админ-панель курса. Выберите, что показать:');
   } else if (text === '📊 Сегодня' || text === '/today') {
     await send(await statsText(db, 'today'));
@@ -305,3 +321,4 @@ export async function handleAdminUpdate(env, update) {
     await send('Выберите пункт в меню 👇');
   }
 }
+
