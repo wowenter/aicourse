@@ -204,7 +204,7 @@ async function payViaKaspi(env, from, u) {
   let pay = await db.prepare(
     `SELECT * FROM payments WHERE tg_id=? AND status='pending' AND order_id LIKE 'kq%' AND amount=?
      AND created_at > ? ORDER BY id DESC LIMIT 1`
-  ).bind(from.id, price(env), t - 150).first();
+  ).bind(from.id, price(env), t - 180).first();
 
   if (!pay) {
     try {

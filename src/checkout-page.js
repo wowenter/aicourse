@@ -20,7 +20,7 @@ export function checkoutHtml(model, nonce) {
 <p class="note">Счёт придёт в приложение Kaspi.kz. Оплатите его там — после подтверждения бот отправит доступ к курсу.</p></form>
 <div id="status" class="status" role="status" aria-live="polite" hidden></div>
 <a id="back" class="back" href="${escapeHtml(model.botUrl)}" hidden>Вернуться в Telegram</a>
-</section><p class="footer">Оплата проходит в Kaspi.<br>Данные карты и SMS-код здесь не нужны.</p></main>
+</section><p class="footer">Оплата проходит в Kaspi.</p></main>
 <script nonce="${nonce}">
 const model=${data};
 const el=id=>document.getElementById(id);

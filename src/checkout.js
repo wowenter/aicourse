@@ -65,7 +65,7 @@ export async function handleCheckout(req, env) {
     const nonce = crypto.randomUUID();
     const model = {
       title: env.PRODUCT_NAME || 'ИИ курсы', amount: row.amount,
-      kaspiUrl: row.status === 'pending' && row.qr_created_at > now() - 150 ? safeKaspiUrl(row.payment_url) : null,
+      kaspiUrl: row.status === 'pending' && row.qr_created_at > now() - 180 ? safeKaspiUrl(row.payment_url) : null,
       botUrl: `https://t.me/${/^[A-Za-z0-9_]+$/.test(env.SALES_BOT_USERNAME || '') ? env.SALES_BOT_USERNAME : 'ii_video_foto_bot'}`,
       ...statusOf(row),
     };
