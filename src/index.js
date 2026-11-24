@@ -10,6 +10,7 @@ import { esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
 import { handleCheckout } from './checkout.js';
 import { retryDeliveries } from './delivery.js';
+import { runPaymentExpiryNotices } from './payment-expiry.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -207,6 +208,7 @@ export default {
     await ensureSchema(env.DB);
     ctx.waitUntil(runReminders(env));
     ctx.waitUntil(retryDeliveries(env));
+    ctx.waitUntil(runPaymentExpiryNotices(env));
     const minute = new Date(event.scheduledTime || Date.now()).getUTCMinutes();
     if (minute % 15 === 0) ctx.waitUntil(kaspiHealth(env).catch((e) => console.log('kaspiHealth', String(e))));
   },

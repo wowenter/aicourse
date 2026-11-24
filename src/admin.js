@@ -255,6 +255,9 @@ export async function handleAdminUpdate(env, update) {
       const body = await response.json();
       if (!response.ok || body.checkout !== 1) throw new Error('Checkout route unavailable');
       await setSetting(db, 'checkout_enabled', '1');
+      if (!(await getSetting(db, 'payment_expiry_notices_since'))) {
+        await setSetting(db, 'payment_expiry_notices_since', now());
+      }
       await send('✅ Страница оплаты включена: автопереход в Kaspi и счёт по номеру телефона. Новые кнопки оплаты ведут на ваш домен.');
     } catch {
       await send('❌ Страница пока недоступна. Сначала примените обновление сервера; затем повторите /checkout_on.');

@@ -61,6 +61,7 @@ export async function handleSalesUpdate(env, update) {
     const q = update.callback_query;
     await tg(token, 'answerCallbackQuery', { callback_query_id: q.id });
     if (q.data === 'pay') await onPay(env, q.from);
+    if (q.data === 'pay:refresh') await onPay(env, q.from, true);
   }
 }
 
@@ -129,7 +130,7 @@ async function onStart(env, from, payload) {
   }
 }
 
-async function onPay(env, from) {
+async function onPay(env, from, forceNew = false) {
   const db = env.DB;
   const t = now();
   let u = await getUserWithClick(db, from.id);
@@ -154,7 +155,7 @@ async function onPay(env, from) {
   }
 
   if ((await paymentProvider(env)) === 'kaspi') {
-    await payViaKaspi(env, from, u);
+    await payViaKaspi(env, from, u, forceNew);
     return;
   }
 
@@ -198,10 +199,10 @@ async function onPay(env, from) {
 }
 
 // Оплата через свою кассу (шлюз Kaspi). Ссылка живёт ~3 минуты, поэтому переиспользуем только свежую.
-async function payViaKaspi(env, from, u) {
+async function payViaKaspi(env, from, u, forceNew = false) {
   const db = env.DB;
   const t = now();
-  let pay = await db.prepare(
+  let pay = forceNew ? null : await db.prepare(
     `SELECT * FROM payments WHERE tg_id=? AND status='pending' AND order_id LIKE 'kq%' AND amount=?
      AND created_at > ? ORDER BY id DESC LIMIT 1`
   ).bind(from.id, price(env), t - 180).first();

@@ -23,6 +23,9 @@ const SCHEMA = [
      lock_until INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0,
      access_link TEXT, credited_at INTEGER, delivered_at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS idx_pay_invoice ON payments(invoice_id)`,
+  `CREATE TABLE IF NOT EXISTS payment_expiry_notices (
+     payment_id INTEGER PRIMARY KEY, sent_at INTEGER,
+     lock_until INTEGER DEFAULT 0, attempts INTEGER DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS idx_users_rem ON users(next_reminder_at)`,
   `CREATE INDEX IF NOT EXISTS idx_users_started ON users(started_at)`,
   `CREATE INDEX IF NOT EXISTS idx_pay_qr ON payments(static_qr_id)`,

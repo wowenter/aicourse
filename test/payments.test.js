@@ -6,7 +6,8 @@ import { Script, runInNewContext } from 'node:vm';
 import { ensureSchema, now } from '../src/db.js';
 import { checkoutLink, handleCheckout, normalizePhone, safeKaspiUrl } from '../src/checkout.js';
 import { checkoutHtml } from '../src/checkout-page.js';
-import { grantAccess } from '../src/sales.js';
+import { grantAccess, handleSalesUpdate } from '../src/sales.js';
+import { runPaymentExpiryNotices } from '../src/payment-expiry.js';
 import { retryDeliveries } from '../src/delivery.js';
 import { kaspiWebhook } from '../src/index.js';
 
@@ -33,12 +34,14 @@ const originalFetch = globalThis.fetch;
 let invoices, deliveries, failSend, invoiceMode;
 before(async () => { await ensureSchema(db); });
 beforeEach(async () => {
-  for (const table of ['checkouts', 'payment_delivery', 'payments', 'users', 'settings', 'clicks']) sqlite.exec(`DELETE FROM ${table}`);
+  for (const table of ['payment_expiry_notices', 'checkouts', 'payment_delivery', 'payments', 'users', 'settings', 'clicks']) sqlite.exec(`DELETE FROM ${table}`);
   invoices = []; deliveries = []; failSend = false; invoiceMode = 'success';
   await db.prepare('INSERT INTO users(tg_id,first_name) VALUES(?,?)').bind(123, 'Test').run();
   await db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').bind('kaspi_session', JSON.stringify({tokenSN:'test',vtokenSecret:'test',profileId:1})).run();
   globalThis.fetch = async (url, options) => {
     const body = JSON.parse(options.body);
+    if (String(url).endsWith('/answerCallbackQuery')) return Response.json({ok:true});
+    if (String(url).endsWith('/api/qr/create')) return Response.json({Data:{QrOperationId:10001,QrToken:'https://pay.kaspi.kz/pay/new'}});
     if (String(url).endsWith('/api/invoice/create')) {
       invoices.push(body);
       await new Promise(resolve => setTimeout(resolve, 5));
@@ -167,4 +170,43 @@ test('no redirect loop on return, or after payment/invoice/expiry', () => {
   for(const [state,opened] of [[{},true],[{paid:true},false],[{invoice:'sent'},false],[{expired:true},false]]){
     const b=browser(state,opened);assert.ok(![...b.timers.values()].some(t=>t.delay===2500));
   }
+});
+
+async function enableExpiry() {
+  for(const [key,value] of [['checkout_enabled','1'],['payment_provider','kaspi'],['payment_expiry_notices_since',String(now()-1000)]]){
+    await db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key,value).run();
+  }
+}
+async function age(id, seconds=181) {
+  await db.prepare('UPDATE payments SET created_at=? WHERE id=?').bind(now()-seconds,id).run();
+}
+test('expiry notice starts at 180 seconds, sends once, and button produces a fresh payment message', async()=>{
+  await enableExpiry();const p=await seed();await age(p.id,179);await runPaymentExpiryNotices(env);assert.equal(deliveries.length,0);
+  await age(p.id,181);await runPaymentExpiryNotices(env);await runPaymentExpiryNotices(env);
+  assert.equal(deliveries.length,1);assert.equal(deliveries[0].reply_markup.inline_keyboard[0][0].callback_data,'pay:refresh');
+  await handleSalesUpdate(env,{callback_query:{id:'test',data:'pay:refresh',from:{id:123,first_name:'Test'}}});
+  assert.equal(deliveries.length,2);assert.match(deliveries[1].reply_markup.inline_keyboard[0][0].url,/^https:\/\/aipay.duckdns.org\/pay\/[a-f0-9]{64}$/);
+  const last=await db.prepare('SELECT * FROM payments ORDER BY id DESC LIMIT 1').first();assert.notEqual(last.id,p.id);assert.equal(last.invoice_id,'10001');
+});
+test('paid orders and active phone invoices suppress expired QR notices', async()=>{
+  await enableExpiry();const p=await seed();await age(p.id);await handleCheckout(invoiceReq(p.url),env);
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,0);
+  await db.prepare("UPDATE payments SET status='expired' WHERE order_id LIKE 'ki%'").run();
+  await db.prepare("UPDATE payments SET status='paid' WHERE id=?").bind(p.id).run();
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,0);
+});
+test('a newer QR suppresses old link notices; bank-expired phone invoice gets a renewal button', async()=>{
+  await enableExpiry();const old=await seed();await age(old.id);const latest=await seed('kq_latest','200');
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,0);
+  await handleCheckout(invoiceReq(latest.url),env);await db.prepare("UPDATE payments SET status='expired' WHERE order_id LIKE 'ki%'").run();
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,1);
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,1);
+});
+test('failed expiry message is retried and historic orders are not messaged on first activation', async()=>{
+  const p=await seed();await age(p.id);await db.prepare("INSERT INTO settings(key,value) VALUES('checkout_enabled','1')").run();
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,0);await runPaymentExpiryNotices(env);assert.equal(deliveries.length,0);
+  await enableExpiry();failSend=true;await runPaymentExpiryNotices(env);assert.equal(deliveries.length,1);
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,1);
+  failSend=false;await db.prepare('UPDATE payment_expiry_notices SET lock_until=0').run();await runPaymentExpiryNotices(env);assert.equal(deliveries.length,2);
+  await runPaymentExpiryNotices(env);assert.equal(deliveries.length,2);
 });
