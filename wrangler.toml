@@ -23,8 +23,6 @@ PRODUCT_NAME = "ИИ арқылы фото мен видео курсы"
 PROMO_VIDEO_URL = "https://wowenter.github.io/aicourse/promo.mp4"
 LANDING_URL = "https://wowenter.github.io/aicourse/"
 TIKTOK_PIXEL_ID = "DC3IMS3C77UELLDGPPOG"
-# ВРЕМЕННО для теста: события пойдут во вкладку Test Events. УБРАТЬ перед запуском рекламы!
-TIKTOK_TEST_EVENT_CODE = "TEST65968"
 # Закрытый канал с курсом (бот продаж — админ с правом приглашать)
 CHANNEL_ID = "-1003567231104"
 # Своя касса Kaspi (шлюз gateway/ на VPS). Адрес шлюза — после деплоя на VPS
