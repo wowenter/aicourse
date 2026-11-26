@@ -2,6 +2,7 @@
 import { now, getUserWithClick, getSetting, setSetting } from './db.js';
 import { tg, esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
+import { sendMetaEvent } from './meta.js';
 import { createPaymentLink } from './apipay.js';
 import { paymentProvider, createKaspiPayment } from './kaspi.js';
 import * as T from './texts.js';
@@ -124,6 +125,7 @@ async function onStart(env, from, payload) {
     await sendTikTokEvent(env, 'CompleteRegistration', u, { eventId: `reg_${from.id}` });
     // Старт бота дублируем как AddToCart — его можно выбрать для оптимизации в цели «Продажи»
     await sendTikTokEvent(env, 'AddToCart', u, { eventId: `atc_${from.id}`, value: price(env) });
+    await sendMetaEvent(env, 'Lead', u, { eventId: `lead_${from.id}`, value: price(env) });
     if ((await getSetting(db, 'notify_leads', '1')) === '1') {
       await notifyAdmins(env, `🆕 Новый лид: ${userLabel(u)}\n📍 Источник: ${adLabel(u)}`);
     }
@@ -149,6 +151,7 @@ async function onPay(env, from, forceNew = false) {
   if (!u.checkout_at) {
     await db.prepare('UPDATE users SET checkout_at=? WHERE tg_id=?').bind(t, from.id).run();
     await sendTikTokEvent(env, 'InitiateCheckout', u, { eventId: `chk_${from.id}`, value: price(env) });
+    await sendMetaEvent(env, 'InitiateCheckout', u, { eventId: `chk_${from.id}`, value: price(env) });
     if ((await getSetting(db, 'notify_leads', '1')) === '1') {
       await notifyAdmins(env, `💳 Нажал «Оплатить»: ${userLabel(u)}\n📍 Источник: ${adLabel(u)}`);
     }

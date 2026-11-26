@@ -8,6 +8,7 @@ import { paymentProvider, checkSession } from './kaspi.js';
 import { getSetting, setSetting } from './db.js';
 import { esc, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
+import { sendMetaEvent } from './meta.js';
 import { handleCheckout } from './checkout.js';
 import { retryDeliveries } from './delivery.js';
 import { runPaymentExpiryNotices } from './payment-expiry.js';
@@ -38,10 +39,10 @@ async function saveClick(req, env, ctx) {
   const nz = (v, n) => (v ? clip(v, n) : null);
   // Атомарно: вставка удаётся только у первого запроса с этим кодом → только он шлёт ViewContent
   const ins = await env.DB.prepare(
-    `INSERT OR IGNORE INTO clicks (code, ttclid, ttp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at, opened_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    `INSERT OR IGNORE INTO clicks (code, ttclid, ttp, fbclid, fbp, ip, ua, page_url, utm_source, utm_campaign, utm_adgroup, utm_ad, created_at, opened_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(
-    code, nz(b.ttclid, 500), nz(b.ttp, 200),
+    code, nz(b.ttclid, 500), nz(b.ttp, 200), nz(b.fbclid, 500), nz(b.fbp, 200),
     req.headers.get('CF-Connecting-IP') || '', clip(req.headers.get('User-Agent'), 500),
     nz(b.url, 1000), nz(b.utm_source, 100), nz(b.utm_campaign, 200),
     nz(b.utm_adgroup, 200), nz(b.utm_ad, 200), t, b.opened ? t : null
@@ -51,13 +52,19 @@ async function saveClick(req, env, ctx) {
     await env.DB.prepare(
       `UPDATE clicks SET ttclid=COALESCE(ttclid, ?), ttp=COALESCE(ttp, ?), opened_at=COALESCE(opened_at, ?) WHERE code=?`
     ).bind(nz(b.ttclid, 500), nz(b.ttp, 200), b.opened ? t : null, code).run();
+    await env.DB.prepare(
+      `UPDATE clicks SET fbclid=COALESCE(fbclid, ?), fbp=COALESCE(fbp, ?) WHERE code=?`
+    ).bind(nz(b.fbclid, 500), nz(b.fbp, 200), code).run();
   }
   // Посещение лендинга → ViewContent в TikTok с сервера (тот же event_id, что у пикселя — TikTok склеит дубли)
   if (isNew && ctx) {
-    ctx.waitUntil(sendTikTokEvent(env, 'ViewContent', {
-      code, ttclid: b.ttclid, ttp: b.ttp, ip: req.headers.get('CF-Connecting-IP') || '',
+    const visitor = {
+      code, ttclid: b.ttclid, ttp: b.ttp, fbclid: b.fbclid, fbp: b.fbp,
+      ip: req.headers.get('CF-Connecting-IP') || '',
       ua: req.headers.get('User-Agent') || '', page_url: b.url,
-    }, { eventId: `vc_${code}`, value: Number(env.PRICE || 4990) }));
+    };
+    ctx.waitUntil(sendTikTokEvent(env, 'ViewContent', visitor, { eventId: `vc_${code}`, value: Number(env.PRICE || 4990) }));
+    ctx.waitUntil(sendMetaEvent(env, 'ViewContent', visitor, { eventId: `vc_${code}`, value: Number(env.PRICE || 4990) }));
   }
   return json({ code }, 200, CORS);
 }

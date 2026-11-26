@@ -23,6 +23,8 @@ PRODUCT_NAME = "ИИ арқылы фото мен видео курсы"
 PROMO_VIDEO_URL = "https://wowenter.github.io/aicourse/promo.mp4"
 LANDING_URL = "https://wowenter.github.io/aicourse/"
 TIKTOK_PIXEL_ID = "DC3IMS3C77UELLDGPPOG"
+# Facebook / Instagram (Meta) пиксель
+META_PIXEL_ID = "1160447729703248"
 # Закрытый канал с курсом (бот продаж — админ с правом приглашать)
 CHANNEL_ID = "-1003567231104"
 # Своя касса Kaspi (шлюз gateway/ на VPS). Адрес шлюза — после деплоя на VPS
@@ -39,6 +41,7 @@ APIPAY_SANDBOX = "0"
 #   ADMIN_IDS              ваш Telegram ID (несколько — через запятую)
 #   WEBHOOK_SECRET         любая длинная строка из букв и цифр
 #   TIKTOK_ACCESS_TOKEN    токен Events API из TikTok Events Manager
+#   META_ACCESS_TOKEN      токен Conversions API из Meta Events Manager
 #   TIKTOK_TEST_EVENT_CODE (необязательно) код из вкладки Test Events
 #   APIPAY_API_KEY         ключ API из кабинета ApiPay
 #   APIPAY_WEBHOOK_SECRET  секрет подписи вебхуков ApiPay

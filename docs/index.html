@@ -12,7 +12,8 @@
   window.CFG = {
     PIXEL_ID: 'DC3IMS3C77UELLDGPPOG',                         // TikTok Events Manager → ваш пиксель
     API: 'https://aicourse.arsennumberone.workers.dev',      // адрес воркера Cloudflare
-    BOT: 'ii_video_foto_bot'                                 // бот продаж, без @
+    BOT: 'ii_video_foto_bot',
+    META_PIXEL_ID: '1160447729703248'           // Meta (Facebook) pixel
   };
 </script>
 
@@ -24,6 +25,18 @@
   ttq.page();
 }(window, document, 'ttq');
 </script>
+
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', window.CFG.META_PIXEL_ID);
+fbq('track', 'PageView');
+</script>
+<!-- End Meta Pixel Code -->
 
 <style>
   :root{
@@ -183,7 +196,8 @@
   }
   function payload(extra) {
     var d = {
-      code: code, ttclid: qs.get('ttclid') || '', ttp: cookie('_ttp'), url: location.href,
+      code: code, ttclid: qs.get('ttclid') || '', ttp: cookie('_ttp'),
+      fbclid: qs.get('fbclid') || '', fbp: cookie('_fbp'), url: location.href,
       utm_source: qs.get('utm_source') || '', utm_campaign: qs.get('utm_campaign') || '',
       utm_adgroup: qs.get('utm_adgroup') || qs.get('utm_term') || '',
       utm_ad: qs.get('utm_ad') || qs.get('utm_content') || ''
@@ -199,6 +213,7 @@
 
   // Сохраняем визит сразу, а когда пиксель поставит cookie _ttp — дополняем
   send();
+  try { fbq('track', 'ViewContent', {value: 4990, currency: 'KZT', content_name: 'course'}, {eventID: 'vc_' + code}); } catch (e) {}
   try { ttq.track('ViewContent', { content_id: 'course', content_type: 'product', content_name: 'ИИ курс', value: 4990, currency: 'KZT' }, { event_id: 'vc_' + code }); } catch (x) {}
   var t0 = Date.now();
   (function waitTtp() {

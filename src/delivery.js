@@ -1,6 +1,7 @@
 import { now, getUserWithClick } from './db.js';
 import { tg, userLabel } from './telegram.js';
 import { sendTikTokEvent } from './tiktok.js';
+import { sendMetaEvent } from './meta.js';
 import { notifyAdmins } from './sales.js';
 import * as T from './texts.js';
 
@@ -44,6 +45,7 @@ export async function deliverPayment(env, paymentId) {
       const u = await getUserWithClick(db, p.tg_id);
       if (!p.is_test || env.TIKTOK_TEST_EVENT_CODE) {
         await sendTikTokEvent(env, 'Purchase', u, {eventId: `pur_${p.id}`, value: p.amount});
+        await sendMetaEvent(env, 'Purchase', u, {eventId: `pur_${p.id}`, value: p.amount});
       }
       await notifyAdmins(env, `💰 <b>Оплата подтверждена${p.is_test ? ' (ТЕСТ)' : ''}</b>\n👤 ${userLabel(u)}\n💵 ${p.amount} ₸\n✅ Доступ отправлен.`);
     } catch { console.error('Post-delivery notification failed', paymentId); }

@@ -3,6 +3,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS clicks (
      code TEXT PRIMARY KEY, ttclid TEXT, ttp TEXT, ip TEXT, ua TEXT, page_url TEXT,
      utm_source TEXT, utm_campaign TEXT, utm_adgroup TEXT, utm_ad TEXT,
+     fbclid TEXT, fbp TEXT,
      created_at INTEGER, opened_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS users (
      tg_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, click_code TEXT,
@@ -33,10 +34,18 @@ const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS idx_clicks_created ON clicks(created_at)`,
 ];
 
+const MIGRATIONS = [
+  'ALTER TABLE clicks ADD COLUMN fbclid TEXT',
+  'ALTER TABLE clicks ADD COLUMN fbp TEXT',
+];
+
 let ready = false;
 export async function ensureSchema(db) {
   if (ready) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
+  for (const m of MIGRATIONS) {
+    try { await db.prepare(m).run(); } catch (e) { /* колонка уже есть */ }
+  }
   ready = true;
 }
 
@@ -53,7 +62,7 @@ export async function setSetting(db, key, value) {
 
 export async function getUserWithClick(db, tgId) {
   return db.prepare(
-    `SELECT u.*, c.ttclid, c.ttp, c.ip, c.ua, c.page_url, c.utm_campaign, c.utm_adgroup, c.utm_ad
+    `SELECT u.*, c.ttclid, c.ttp, c.fbclid, c.fbp, c.ip, c.ua, c.page_url, c.utm_campaign, c.utm_adgroup, c.utm_ad
      FROM users u LEFT JOIN clicks c ON c.code = u.click_code WHERE u.tg_id=?`
   ).bind(tgId).first();
 }
